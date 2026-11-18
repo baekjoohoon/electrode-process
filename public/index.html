@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DOMINO 12 — 밀면, 다 이해된다</title>
+<meta name="description" content="12개의 도미노로 만든 한 장의 랜딩 페이지. 한 번 밀면 마지막 것까지 순서대로 넘어집니다. 설명서 대신 넘어지는 순서를 넣었습니다.">
+<meta name="theme-color" content="#ffffff">
+<meta property="og:type" content="website">
+<meta property="og:title" content="DOMINO 12 — 밀면, 다 이해된다">
+<meta property="og:description" content="12개의 도미노. 한 번 밀면 마지막 것까지 순서대로 넘어집니다. 페이지 안에서 직접 밀어볼 수 있습니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fff'/%3E%3Crect x='11' y='4' width='10' height='24' rx='2' fill='%23101010'/%3E%3Ccircle cx='16' cy='10' r='1.6' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='%23fff'/%3E%3Ccircle cx='16' cy='22' r='1.6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/pretendard-subset.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face{
+    font-family:"PretendardSubset";
+    src:url("fonts/pretendard-subset.woff2") format("woff2");
+    font-weight:45 920;font-style:normal;font-display:swap;
+  }
+
+  :root{
+    --ink:#101010; --ink-soft:#3c3c38; --muted:#71716a;
+    --line:#e4e4df; --line-soft:#eeece8;
+    --accent:#d93a1c;
+    --paper:#ffffff; --wash:#f7f7f4;
+    --sh:46vh; --pad:clamp(20px,4.6vw,52px); --col:1120px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    interpolate-size:allow-keywords;
+  }
+  @supports (height:1svh){ :root{ --sh:46svh } }
+  @media (max-width:720px){ :root{ --sh:36vh } }
+  @media (max-width:720px) and (height:1svh){ :root{ --sh:36svh } }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"PretendardSubset","Pretendard",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+    font-weight:420;font-size:17px;line-height:1.75;letter-spacing:-0.011em;
+    padding-bottom:var(--sh);overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  ::selection{background:var(--ink);color:var(--paper)}
+  h1,h2,h3{margin:0;font-weight:660;letter-spacing:-0.035em;line-height:1.06;text-wrap:balance}
+  p{margin:0}
+  a{color:inherit}
+  button{font:inherit;color:inherit;text-align:left}
+  @supports (text-box-trim:trim-both){ h1,h2,h3{ text-box:trim-both cap alphabetic } }
+
+  .wrap{max-width:var(--col);margin:0 auto;padding-inline:var(--pad)}
+  .eyebrow{font-family:var(--mono);font-size:.6875rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:.75em}
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--line);flex:none}
+
+  /* 등장: 스크롤 타임라인이 있으면 CSS가, 없으면 JS(IntersectionObserver)가 담당 */
+  .rv{opacity:0;transform:translateY(22px);transition:opacity .85s cubic-bezier(.2,.7,.2,1),transform .85s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0ms)}
+  .rv.on{opacity:1;transform:none}
+  html.sda .rv{opacity:1;transform:none;transition:none;animation:rv-in linear both;animation-timeline:view();animation-range:entry 0% entry 78%}
+  @keyframes rv-in{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+
+  /* ── 히어로 ────────────────────────────────────────── */
+  .hero{min-height:calc(100vh - var(--sh));display:flex;flex-direction:column;justify-content:space-between;padding-block:clamp(20px,3vh,38px) clamp(24px,3.6vh,50px)}
+  @supports (height:1svh){ .hero{min-height:calc(100svh - var(--sh))} }
+  .brand{display:flex;align-items:baseline;justify-content:space-between;gap:14px;font-family:var(--mono);font-size:.6875rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+  .brand .dot{display:inline-block;width:6px;height:6px;background:var(--accent);border-radius:50%;margin-right:8px;transform:translateY(-1px)}
+  .hero-body{display:grid;gap:clamp(18px,3.2vh,34px);padding-top:clamp(26px,7vh,88px)}
+  .hero h1{font-size:clamp(2.6rem,8.6vw,6.6rem);font-weight:690;letter-spacing:-0.048em}
+  .hero h1 em{font-style:normal;color:var(--accent)}
+  .lede{max-width:33ch;color:var(--ink-soft);font-size:clamp(1rem,1.3vw,1.1rem)}
+  .hero-foot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+  .hint{color:var(--muted);font-size:.875rem}
+
+  .btn{appearance:none;border:1px solid var(--ink);background:var(--ink);color:var(--paper);border-radius:999px;padding:.74em 1.55em;font-size:.9375rem;font-weight:540;letter-spacing:-0.01em;cursor:pointer;transition:transform .16s ease,background .2s ease,color .2s ease,border-color .2s ease;white-space:nowrap}
+  .btn:hover{transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn.ghost:hover{border-color:var(--ink)}
+  .btn.tiny{padding:.42em 1em;font-size:.8125rem;color:var(--muted);border-color:var(--line)}
+  .btn.tiny[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+  .btn:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+  /* ── 무대 ─────────────────────────────────────────── */
+  #stage{position:fixed;left:0;right:0;bottom:0;height:var(--sh);background:var(--paper);border-top:1px solid var(--line);z-index:5}
+  #stage canvas{display:block;width:100%;height:100%;touch-action:none}
+  #stage canvas.armed{cursor:grab}
+  #stage canvas.grabbing{cursor:grabbing}
+  .readout{position:absolute;left:var(--pad);top:11px;right:var(--pad);display:flex;flex-wrap:wrap;gap:4px 16px;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);pointer-events:none}
+  .readout b{color:var(--ink);font-weight:600}
+  .readout .sep{color:var(--line);margin:0 5px}
+  .rail{position:absolute;left:var(--pad);right:var(--pad);bottom:10px;height:2px;display:flex;gap:3px;pointer-events:none}
+  .rail i{flex:1;background:var(--line-soft);transition:background .4s ease}
+  .rail i.on{background:var(--ink)}
+  .rail i.hot{background:var(--accent)}
+  @media (max-width:560px){
+    .readout{font-size:.625rem;letter-spacing:.03em;gap:2px 10px}
+    .readout .sep{margin:0 3px}
+  }
+
+  /* ── 섹션 ─────────────────────────────────────────── */
+  main{position:relative;z-index:1}
+  section{padding-block:clamp(64px,10vh,120px);border-top:1px solid var(--line)}
+  section.wash{background:var(--wash)}
+  .sec-head{display:grid;gap:16px}
+  h2{font-size:clamp(1.6rem,3.4vw,2.45rem);max-width:22ch}
+  .body-copy{max-width:60ch;color:var(--ink-soft);margin-top:clamp(16px,2.4vh,24px)}
+  .note{margin-top:clamp(22px,3.4vh,34px);font-family:var(--mono);font-size:.75rem;line-height:1.9;letter-spacing:.02em;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;max-width:70ch}
+
+  .specs{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(14px,2.2vw,32px);margin-top:clamp(24px,3.6vh,40px)}
+  .specs div{display:grid;gap:5px}
+  .specs .n{font-size:clamp(1.45rem,2.9vw,2.1rem);font-weight:640;letter-spacing:-0.045em}
+  .specs .l{color:var(--muted);font-size:.8125rem;line-height:1.5}
+
+  .grid{margin-top:clamp(26px,4vh,46px);border-top:1px solid var(--line)}
+  .cell{display:grid;grid-template-columns:56px minmax(140px,220px) 1fr;gap:14px;align-items:baseline;border-bottom:1px solid var(--line);padding:clamp(16px,2.4vh,24px) 0}
+  .cell .k{font-family:var(--mono);font-size:.6875rem;letter-spacing:.14em;color:var(--accent)}
+  .cell .v{font-size:clamp(1.02rem,1.45vw,1.15rem);font-weight:560;letter-spacing:-0.022em}
+  .cell .d{color:var(--muted);font-size:.9375rem}
+
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(16px,3vw,38px);margin-top:clamp(26px,4vh,46px);counter-reset:s}
+  .steps article{display:grid;gap:9px;align-content:start}
+  .steps article::before{counter-increment:s;content:counter(s,decimal-leading-zero);font-family:var(--mono);font-size:.6875rem;letter-spacing:.16em;color:var(--accent)}
+  .steps h3{font-size:clamp(1.08rem,1.65vw,1.3rem)}
+  .steps p{color:var(--muted);font-size:.9375rem}
+
+  details{border-bottom:1px solid var(--line)}
+  details:first-of-type{border-top:1px solid var(--line)}
+  summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:20px;align-items:baseline;padding:clamp(17px,2.4vh,23px) 0;font-size:clamp(1rem,1.35vw,1.1rem);font-weight:560;letter-spacing:-0.022em}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"+";font-family:var(--mono);color:var(--muted);transition:transform .25s ease;flex:none}
+  details[open] summary::after{transform:rotate(45deg)}
+  details .ans{padding-bottom:clamp(17px,2.4vh,24px);color:var(--muted);max-width:60ch}
+  @supports selector(details::details-content){
+    details::details-content{block-size:0;overflow:hidden;opacity:0;transition:block-size .34s cubic-bezier(.2,.7,.2,1),opacity .3s ease,content-visibility .34s allow-discrete}
+    details[open]::details-content{block-size:auto;opacity:1}
+  }
+
+  .close{padding-bottom:clamp(80px,14vh,140px)}
+  .close h2{font-size:clamp(2rem,5.4vw,3.5rem);letter-spacing:-0.048em;max-width:18ch}
+  .close .lede{margin-top:18px;max-width:46ch}
+  .close .hero-foot{margin-top:clamp(22px,3.6vh,36px)}
+
+  footer{border-top:1px solid var(--line);padding-block:clamp(28px,4.6vh,44px)}
+  footer .row{display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:space-between;align-items:baseline;color:var(--muted);font-size:.8125rem}
+  footer p{max-width:62ch}
+
+  @media (max-width:720px){
+    body{font-size:16px}
+    .specs{grid-template-columns:repeat(2,1fr)}
+    .steps{grid-template-columns:1fr;gap:24px}
+    .cell{grid-template-columns:44px 1fr;gap:6px 12px}
+    .cell .d{grid-column:2}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .rv,html.sda .rv{opacity:1;transform:none;transition:none;animation:none}
+    html{scroll-behavior:auto}
+    .btn{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage" role="img" aria-label="도미노 12개가 바닥 위에 세워진 무대. 밀면 앞에서부터 순서대로 넘어집니다.">
+  <div class="readout" aria-hidden="true">
+    <span>넘어짐 <b id="r-fall">0</b>/12 <span class="sep">·</span> 최대 각도 <b id="r-ang">0.0°</b> <span class="sep">·</span> 충돌 <b id="r-hit">0</b> <span class="sep">·</span> 경과 <b id="r-time">0.00초</b></span>
+    <span id="r-mode">대기 · 첫 번째 도미노를 밀어보세요</span>
+  </div>
+  <canvas id="cv" aria-hidden="true"></canvas>
+  <div class="rail" id="rail" aria-hidden="true"></div>
+</div>
+
+<main>
+  <section class="hero wrap">
+    <div class="brand">
+      <span><i class="dot"></i>Domino 12 — 데스크 토이</span>
+      <span>제1회 해커톤: 랜딩톤 출품작</span>
+    </div>
+
+    <div class="hero-body">
+      <h1>밀면,<br>다 <em>이해</em>된다</h1>
+      <p class="lede">12개의 도미노. 한 번 밀면 마지막 것까지 순서대로 넘어갑니다. 설명서 대신 넘어지는 순서를 넣었습니다.</p>
+    </div>
+
+    <div class="hero-foot">
+      <button class="btn" id="push">밀어보기</button>
+      <button class="btn ghost" id="reset">다시 세우기</button>
+      <button class="btn tiny" id="sound" aria-pressed="false">소리 켜기</button>
+      <span class="hint">도미노를 잡아 기울여도 됩니다 · 스크롤하면 시야가 따라갑니다</span>
+    </div>
+  </section>
+
+  <section class="wash">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="eyebrow">01 — 왜 도미노인가</span>
+        <h2>설명서 대신 순서를 넣었습니다</h2>
+      </div>
+      <p class="body-copy rv" style="--d:70ms" data-domino="2">도미노에는 튜토리얼이 없습니다. 무게중심이 앞으로 넘어가면 다음 도미노가 그 힘을 그대로 받습니다. 넘어지는 순서 자체가 설명이 되고, 마지막 도미노가 멈추면 설명이 끝납니다. 세워 두는 것만으로도 충분히 예쁘고, 넘어지는 동안에만 무언가를 가르칩니다.</p>
+      <div class="specs">
+        <div class="rv" style="--d:110ms" data-domino="3"><span class="n">12개</span><span class="l">한 세트 구성</span></div>
+        <div class="rv" style="--d:160ms" data-domino="4"><span class="n">14mm</span><span class="l">무게추 두께</span></div>
+        <div class="rv" style="--d:210ms" data-domino="5"><span class="n">0.17초</span><span class="l">한 칸이 다음 칸을 넘기는 시간</span></div>
+        <div class="rv" style="--d:260ms" data-domino="6"><span class="n">2.1초</span><span class="l">열두 칸이 모두 넘어지는 시간</span></div>
+      </div>
+      <p class="note">이 페이지의 도미노는 그림이 아니라 계산입니다. 강체 12개 + 바닥, SAT 충돌 검출, 접촉 마진, 웜 스타트 순차 임펄스와 마찰, 240Hz 고정 스텝. 브라우저가 실시간으로 풀고 있고, 외부 물리 라이브러리는 쓰지 않았습니다.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="eyebrow">02 — 무엇이 들어 있나</span>
+        <h2>네 가지뿐입니다</h2>
+      </div>
+      <div class="grid">
+        <div class="cell rv"><span class="k">01</span><span class="v">도미노 12개</span><span class="d">바닥에 무게추가 있어 세워 두면 흔들리지 않습니다. 마지막 한 개만 색이 다릅니다.</span></div>
+        <div class="cell rv" style="--d:70ms"><span class="k">02</span><span class="v">시작 막대</span><span class="d">첫 번째만 정확히 밀면 나머지는 알아서 갑니다. 막대가 없으면 손끝으로 밀어도 됩니다.</span></div>
+        <div class="cell rv" style="--d:140ms"><span class="k">03</span><span class="v">받침 트레이</span><span class="d">넘어진 것을 한 번에 세워 담습니다. 12개가 한 줄로 정렬됩니다.</span></div>
+        <div class="cell rv" style="--d:210ms"><span class="k">04</span><span class="v">설명서 없음</span><span class="d">이 페이지가 그 자리를 대신합니다. 읽고 나면 서랍 속에 넣어 두게 됩니다.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wash">
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="eyebrow">03 — 세 단계</span>
+        <h2>세우고, 밀고, 봅니다</h2>
+      </div>
+      <div class="steps">
+        <article class="rv" data-domino="7"><h3>세운다</h3><p>바닥 홈에 맞춰 12개를 세웁니다. 간격은 손가락 두 마디, 정확히 52mm입니다.</p></article>
+        <article class="rv" style="--d:80ms" data-domino="8"><h3>민다</h3><p>첫 번째를 손끝으로 밀어 넘깁니다. 힘은 거의 필요 없습니다. 8도만 넘어가면 끝입니다.</p></article>
+        <article class="rv" style="--d:160ms" data-domino="9"><h3>본다</h3><p>마지막 도미노가 넘어질 때까지 순서대로 넘어집니다. 중간에 손을 댈 수도 있습니다.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="sec-head rv">
+        <span class="eyebrow">04 — 자주 묻는 것</span>
+        <h2>궁금한 것</h2>
+      </div>
+      <div style="margin-top:clamp(26px,4vh,44px)">
+        <details class="rv" data-domino="10"><summary>한 번 넘어지면 끝인가요?</summary><p class="ans">아닙니다. 트레이에 담아 한 번에 세우면 다시 시작할 수 있습니다. 몇 번이든 반복해서 넘길 수 있고, 이 페이지에서는 오른쪽 위 버튼으로 바로 다시 세울 수 있습니다.</p></details>
+        <details class="rv"><summary>소리가 큰가요?</summary><p class="ans">무게추가 바닥에 닿아 낮은 소리가 납니다. 열두 번의 작은 소리가 거의 일정한 간격으로 이어집니다. 이 페이지에서는 왼쪽의 소리 버튼을 켜면 직접 들을 수 있습니다.</p></details>
+        <details class="rv"><summary>왜 12개인가요?</summary><p class="ans">한 번의 연쇄가 2초 안에 끝나고, 책상 위에 한 줄로 들어가는 최대 개수입니다. 더 길게 넘기고 싶다면 두 세트를 이어 붙이면 됩니다. 간격만 맞추면 열두 개든 스물네 개든 똑같이 넘어갑니다.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="close">
+    <div class="wrap">
+      <span class="eyebrow rv">05 — 지금</span>
+      <h2 class="rv" style="--d:60ms;margin-top:14px">한 번 밀어보세요</h2>
+      <p class="lede rv" style="--d:120ms" data-domino="11">도미노 12는 제1회 해커톤: 랜딩톤 출품작입니다. 제품 소개와 체험, 그리고 물리 엔진을 이 한 장 안에 담았습니다.</p>
+      <div class="hero-foot">
+        <button class="btn rv" style="--d:180ms" id="push2">밀어보기</button>
+        <button class="btn ghost rv" style="--d:220ms" id="reset2">다시 세우기</button>
+        <button class="btn tiny rv" style="--d:250ms" id="sound2" aria-pressed="false">소리 켜기</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap row">
+      <p>© 2026 · 제1회 해커톤: 랜딩톤 출품작. 페이지의 물리 엔진과 렌더링은 외부 라이브러리 없이 직접 작성했습니다. 서체는 Pretendard(SIL Open Font License 1.1)입니다.</p>
+      <span>한 장 · 한 페이지 · 스크롤 하나</span>
+    </div>
+  </footer>
+</main>
+
+<noscript>
+  <p style="max-width:60ch;margin:0 auto;padding:24px var(--pad);color:#71716a">도미노 시뮬레이션은 자바스크립트가 필요합니다. 제품 설명은 위의 내용으로 모두 읽을 수 있습니다.</p>
+</noscript>
+
+<script>
+(() => {
+"use strict";
+
+/* ══════════════════════════════════════════════════════════
+   1. 물리 설정
+   ══════════════════════════════════════════════════════════ */
+const CFG = {
+  N: 12,            // 도미노 개수
+  HW: 7,            // 두께 절반
+  HH: 50,           // 높이 절반
+  SPACING: 52,      // 중심 간격 (< 높이 → 연쇄가 이어진다)
+  X0: 120,          // 첫 도미노 x
+  GROUND_Y: 170,    // 바닥 윗면
+  GRAV: 1400,
+  DT: 1 / 240,
+  SUB: 4,           // 프레임당 서브스텝
+  ITER: 8,          // 임펄스 반복 (웜 스타트와 함께 사용)
+  MARGIN: 0.6,      // 접촉 마진 — 접촉 유지로 정지 상태 안정화
+  SLOP: 0.4,
+  CORRECT: 0.7,
+  MU: 0.7,
+  REST: 0.02,
+};
+const MASS = 1;
+const INV_I = 1 / ((MASS / 12) * ((2 * CFG.HW) ** 2 + (2 * CFG.HH) ** 2));
+
+const CHAIN_MIN = CFG.X0 - 40;
+const CHAIN_MAX = CFG.X0 + (CFG.N - 1) * CFG.SPACING + 44;
+
+/* ══════════════════════════════════════════════════════════
+   2. 강체
+   ══════════════════════════════════════════════════════════ */
+class Body {
+  constructor(x, y, a, isStatic) {
+    this.x = x; this.y = y; this.a = a;
+    this.vx = 0; this.vy = 0; this.w = 0;
+    this.hw = CFG.HW; this.hh = CFG.HH;
+    this.st = !!isStatic;
+    this.im = this.st ? 0 : 1 / MASS;
+    this.ii = this.st ? 0 : INV_I;
+    this.hx = x; this.hy = y; this.ha = a;
+    this.sleep = false; this.still = 0; this.rv = false;
+  }
+  footX() { return this.x + (-Math.sin(this.a)) * CFG.HH; }
+  footY() { return this.y + (Math.cos(this.a)) * CFG.HH; }
+  setAngleAroundFoot(a) {
+    const fx = this.footX(), fy = this.footY();
+    this.a = a;
+    this.x = fx + Math.sin(a) * CFG.HH;
+    this.y = fy - Math.cos(a) * CFG.HH;
+  }
+  corners() {
+    const c = Math.cos(this.a), s = Math.sin(this.a), { hw, hh } = this;
+    const o = [];
+    for (let i = 0; i < 4; i++) {
+      const sx = (i === 0 || i === 3) ? -hw : hw;
+      const sy = (i < 2) ? -hh : hh;
+      o.push({ x: this.x + c * sx - s * sy, y: this.y + s * sx + c * sy });
+    }
+    return o;
+  }
+  goHome() {
+    this.x = this.hx; this.y = this.hy; this.a = this.ha;
+    this.vx = this.vy = this.w = 0;
+    this.im = this.st ? 0 : 1 / MASS;
+    this.ii = this.st ? 0 : INV_I;
+    this.sleep = false; this.still = 0; this.rv = false;
+  }
+}
+
+const ground = new Body(CFG.X0 + (CFG.N * CFG.SPACING) / 2, CFG.GROUND_Y + 400, 0, true);
+ground.hw = 4000; ground.hh = 400;
+
+const dominoes = [];
+for (let i = 0; i < CFG.N; i++) {
+  dominoes.push(new Body(CFG.X0 + i * CFG.SPACING, CFG.GROUND_Y - CFG.HH + 0.02, 0, false));
+}
+const bodies = [ground, ...dominoes];
+
+/* ══════════════════════════════════════════════════════════
+   3. 충돌 검출 — OBB SAT + 꼭짓점 접촉 + 접촉 마진
+   ══════════════════════════════════════════════════════════ */
+function satAxes(b) {
+  const c = Math.cos(b.a), s = Math.sin(b.a);
+  return [c, s, -s, c];  // 국소 x축(c,s), 국소 y축(-s,c)
+}
+function project(pts, ax, ay) {
+  let mn = Infinity, mx = -Infinity;
+  for (const p of pts) {
+    const d = p.x * ax + p.y * ay;
+    if (d < mn) mn = d;
+    if (d > mx) mx = d;
+  }
+  return [mn, mx];
+}
+// 4개 축(평탄 배열 8개)에 대해 분리축 검사. 마진만큼 떨어진 상태도 접촉으로 본다.
+function sat(pa, pb, axes) {
+  let depth = Infinity, nx = 0, ny = 0;
+  for (let k = 0; k < 4; k++) {
+    const ax = axes[k * 2], ay = axes[k * 2 + 1];
+    const a = project(pa, ax, ay), b = project(pb, ax, ay);
+    const overlap = Math.min(a[1], b[1]) - Math.max(a[0], b[0]);
+    if (overlap <= -CFG.MARGIN) return null;
+    if (overlap < depth) {
+      depth = overlap;
+      const sgn = (a[0] + a[1] < b[0] + b[1]) ? 1 : -1;   // 법선은 A → B
+      nx = ax * sgn; ny = ay * sgn;
+    }
+  }
+  return { depth: Math.max(0, depth), nx, ny };
+}
+// 점이 상자의 마진 안쪽인가. 겹치면 깊이(>0), 마진 안에서 닿기만 하면 0, 바깥이면 null.
+function pointOverlap(px, py, b) {
+  const c = Math.cos(b.a), s = Math.sin(b.a);
+  const dx = px - b.x, dy = py - b.y;
+  const lx = dx * c + dy * s, ly = -dx * s + dy * c;
+  const m = Math.min(b.hw - Math.abs(lx), b.hh - Math.abs(ly));
+  return m > -CFG.MARGIN ? Math.max(0, m) : null;
+}
+
+let contacts = [];
+let contactCache = new Map();   // 지난 서브스텝의 누적 임펄스 (웜 스타트)
+const touching = new Map();     // 접촉 시작 계측 (충돌 횟수 · 소리)
+let hitCount = 0;
+let pendingSounds = [];
+
+function collide() {
+  contacts = [];
+  const next = new Map();
+  pendingSounds = [];
+
+  for (let i = 0; i < bodies.length; i++) {
+    const A = bodies[i];
+    for (let j = i + 1; j < bodies.length; j++) {
+      const B = bodies[j];
+      if (A.st && B.st) continue;
+      if (A.sleep && B.sleep) continue;
+
+      const ra = Math.hypot(A.hw, A.hh), rb = Math.hypot(B.hw, B.hh);
+      const dx = B.x - A.x, dy = B.y - A.y;
+      if (dx * dx + dy * dy > (ra + rb + CFG.MARGIN) ** 2) continue;
+
+      const ca = A.corners(), cb = B.corners();
+      const aA = satAxes(A), aB = satAxes(B);
+      const s = sat(ca, cb, [aA[0], aA[1], aA[2], aA[3], aB[0], aB[1], aB[2], aB[3]]);
+      if (!s) continue;
+
+      const flip = (dx * s.nx + dy * s.ny) >= 0 ? 1 : -1;   // 항상 A → B
+      const nx = s.nx * flip, ny = s.ny * flip;
+      const base = (i + 1) * 10000 + (j + 1) * 100;
+      let made = 0;
+
+      const add = (feature, px, py, pen) => {
+        const key = base + feature;
+        const prev = contactCache.get(key);
+        const c = { A, B, px, py, nx, ny, pen, n: 0, t: 0 };
+        if (prev) c.n = prev.n;                 // 법선 임펄스 웜 스타트
+        next.set(key, c);
+        contacts.push(c);
+        made++;
+      };
+
+      for (let f = 0; f < 4; f++) {
+        const d = pointOverlap(ca[f].x, ca[f].y, B);
+        if (d !== null) add(f, ca[f].x, ca[f].y, d);
+      }
+      for (let f = 0; f < 4; f++) {
+        const d = pointOverlap(cb[f].x, cb[f].y, A);
+        if (d !== null) add(4 + f, cb[f].x, cb[f].y, d);
+      }
+      if (made === 0) add(8, (A.x + B.x) / 2, (A.y + B.y) / 2, s.depth);
+
+      const k = i * 100 + j;
+      if (!touching.get(k)) { touching.set(k, true); hitCount++; pendingSounds.push({ i, x: B.x }); }
+    }
+  }
+
+  const seen = new Set();
+  for (const k of touching.keys()) {
+    const i = Math.floor(k / 100), j = k % 100;
+    const A = bodies[i], B = bodies[j];
+    const ra = Math.hypot(A.hw, A.hh), rb = Math.hypot(B.hw, B.hh);
+    const dx = B.x - A.x, dy = B.y - A.y;
+    if (dx * dx + dy * dy <= (ra + rb + CFG.MARGIN * 3) ** 2) seen.add(k);
+  }
+  for (const k of [...touching.keys()]) if (!seen.has(k)) touching.delete(k);
+
+  contactCache = next;
+}
+
+/* ══════════════════════════════════════════════════════════
+   4. 솔버 — 웜 스타트 + 순차 임펄스 + 마찰
+   ══════════════════════════════════════════════════════════ */
+const velX = (b, c) => b.vx - b.w * (c.py - b.y);
+const velY = (b, c) => b.vy + b.w * (c.px - b.x);
+function invAlong(b, c, dx, dy) {
+  const rx = c.px - b.x, ry = c.py - b.y;
+  const cr = rx * dy - ry * dx;
+  return b.im + b.ii * cr * cr;
+}
+function applyImp(b, c, dx, dy, j) {
+  const rx = c.px - b.x, ry = c.py - b.y;
+  b.vx += j * dx * b.im; b.vy += j * dy * b.im;
+  b.w += j * (rx * dy - ry * dx) * b.ii;
+}
+
+function solve() {
+  // 웜 스타트: 지난 스텝의 법선 임펄스를 먼저 적용
+  for (const c of contacts) {
+    if (c.n > 0) {
+      applyImp(c.B, c, c.nx, c.ny, c.n);
+      applyImp(c.A, c, -c.nx, -c.ny, c.n);
+    }
+  }
+  // 반복 순서를 매번 뒤집어 특정 접촉에 편향되지 않게 한다
+  for (let it = 0; it < CFG.ITER; it++) {
+    const rev = (it & 1) === 1;
+    for (let kk = 0; kk < contacts.length; kk++) {
+      const c = contacts[rev ? contacts.length - 1 - kk : kk];
+      const { A, B, nx, ny } = c;
+
+      const rvx = velX(B, c) - velX(A, c);
+      const rvy = velY(B, c) - velY(A, c);
+      const vn = rvx * nx + rvy * ny;
+      if (vn < 0) {
+        const inv = invAlong(A, c, nx, ny) + invAlong(B, c, nx, ny);
+        if (inv > 0) {
+          const j = -(1 + CFG.REST) * vn / inv;
+          const nn = Math.max(0, c.n + j);
+          const dj = nn - c.n; c.n = nn;
+          if (dj !== 0) {
+            applyImp(B, c, nx, ny, dj);
+            applyImp(A, c, -nx, -ny, dj);
+            if (dj > 1) { A.sleep = false; B.sleep = false; }
+          }
+        }
+      }
+
+      const rvx2 = velX(B, c) - velX(A, c);
+      const rvy2 = velY(B, c) - velY(A, c);
+      const vnn = rvx2 * nx + rvy2 * ny;
+      let tx = rvx2 - vnn * nx, ty = rvy2 - vnn * ny;
+      const tl = Math.hypot(tx, ty);
+      if (tl < 1e-6) continue;
+      tx /= tl; ty /= tl;
+      const invT = invAlong(A, c, tx, ty) + invAlong(B, c, tx, ty);
+      if (invT <= 0) continue;
+      const jt = -(rvx2 * tx + rvy2 * ty) / invT;
+      const lim = CFG.MU * c.n;
+      const want = Math.max(-lim, Math.min(lim, c.t + jt));
+      const dj = want - c.t; c.t = want;
+      if (dj !== 0) {
+        applyImp(B, c, tx, ty, dj);
+        applyImp(A, c, -tx, -ty, dj);
+      }
+    }
+  }
+}
+
+function correct() {
+  for (const c of contacts) {
+    const { A, B, nx, ny, pen } = c;
+    const inv = A.im + B.im;
+    if (inv <= 0) continue;
+    const mag = Math.max(pen - CFG.SLOP, 0) * CFG.CORRECT / inv;
+    if (mag === 0) continue;
+    A.x -= nx * mag * A.im; A.y -= ny * mag * A.im;
+    B.x += nx * mag * B.im; B.y += ny * mag * B.im;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   5. 시뮬레이션
+   ══════════════════════════════════════════════════════════ */
+let elapsed = 0, started = false, paused = false;
+
+function integrate(dt) {
+  for (const b of bodies) {
+    if (b.st || b.sleep) continue;
+    b.vy += CFG.GRAV * dt;
+    const damp = Math.pow(0.9995, dt * 240);
+    b.vx *= damp; b.vy *= damp; b.w *= damp;
+    b.vx = Math.max(-3000, Math.min(3000, b.vx));
+    b.vy = Math.max(-3000, Math.min(3000, b.vy));
+    b.w = Math.max(-50, Math.min(50, b.w));
+    b.x += b.vx * dt; b.y += b.vy * dt; b.a += b.w * dt;
+  }
+}
+
+function sleepPass(dt) {
+  for (const b of dominoes) {
+    if (!Number.isFinite(b.x + b.y + b.a) || b.y > CFG.GROUND_Y + 260 || b.x < CFG.X0 - 900 || b.x > CHAIN_MAX + 900) {
+      b.goHome();
+      continue;
+    }
+    if (b.sleep) continue;
+    const still = Math.abs(b.vx) < 2 && Math.abs(b.vy) < 2 && Math.abs(b.w) < 0.02;
+    b.still = still ? b.still + dt : 0;
+    if (b.still > 0.4) { b.sleep = true; b.vx = b.vy = b.w = 0; }
+  }
+}
+
+function step(dt) {
+  integrate(dt);
+  collide();
+  solve();
+  correct();
+  sleepPass(dt);
+  if (started) elapsed += dt;
+}
+
+/* ══════════════════════════════════════════════════════════
+   6. 외부 조작
+   ══════════════════════════════════════════════════════════ */
+const toppledCount = () => dominoes.reduce((n, d) => n + (Math.abs(d.a) > 0.3 ? 1 : 0), 0);
+function maxAngle() {
+  let m = 0;
+  for (const d of dominoes) m = Math.max(m, Math.abs(d.a));
+  return m * 180 / Math.PI;
+}
+function push(idx = 0, force = 120) {
+  const d = dominoes[idx];
+  if (!d || Math.abs(d.a) > 0.95) return false;
+  const c = { px: d.x + Math.sin(d.a) * CFG.HH * 0.85, py: d.y - Math.cos(d.a) * CFG.HH * 0.85 };
+  d.sleep = false; d.still = 0;
+  applyImp(d, c, force, 0, 1);
+  started = true;
+  return true;
+}
+let grabIdx = -1;
+
+function resetWorld() {
+  for (const b of bodies) b.goHome();
+  elapsed = 0; started = false; hitCount = 0;
+  touching.clear(); contactCache.clear();
+  camAuto = 0; grabIdx = -1;
+  collide(); paint(); render();
+}
+
+/* ══════════════════════════════════════════════════════════
+   7. 렌더
+   ══════════════════════════════════════════════════════════ */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const rail = document.getElementById("rail");
+const railBits = [];
+for (let i = 0; i < CFG.N; i++) { const el = document.createElement("i"); rail.appendChild(el); railBits.push(el); }
+
+let W = 1, H = 1, dpr = 1, scale = 1, groundScreenY = 0, viewW = 520, cam = 0, camAuto = 0;
+let grabbing = false, grabPrev = 0;
+let _accent = null;
+const ACCENT = () => (_accent ||= getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#d93a1c");
+const camMax = () => Math.max(0, CHAIN_MAX - viewW);
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, Math.round(r.width));
+  H = Math.max(1, Math.round(r.height));
+  cv.width = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  viewW = window.innerWidth < 720 ? 300 : 520;
+  scale = Math.min(W / viewW, (H * 0.74) / (CFG.HH * 2), 3.6);
+  groundScreenY = Math.round(H * 0.86);
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(16,16,16,0.06)";
+  ctx.fillRect(0, groundScreenY, W, 1);
+  ctx.fillStyle = "rgba(16,16,16,0.13)";
+  for (let i = 0; i < CFG.N; i++) {
+    const x = Math.round((CFG.X0 + i * CFG.SPACING - cam) * scale);
+    if (x < -8 || x > W + 8) continue;
+    ctx.fillRect(x, groundScreenY + 1, 1, 6);
+  }
+  for (let i = 0; i < CFG.N; i++) {
+    const b = dominoes[i];
+    const x = (b.x - cam) * scale;
+    const y = groundScreenY + (b.y - CFG.GROUND_Y) * scale;
+    const w = b.hw * 2 * scale, h = b.hh * 2 * scale;
+    if (x < -w || x > W + w) continue;
+    const fallen = Math.abs(b.a) > 0.3;
+    const moving = !fallen && !b.sleep && Math.abs(b.w) > 0.25;
+    const last = i === CFG.N - 1;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(b.a);
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, Math.min(3 * scale, w * 0.2));
+    ctx.fillStyle = moving || last ? ACCENT() : (fallen ? "rgba(16,16,16,0.32)" : "#101010");
+    ctx.fill();
+    if (!fallen) {
+      ctx.fillStyle = "rgba(255,255,255,0.42)";
+      ctx.fillRect(-w / 2 + w * 0.2, -h / 2 + h * 0.14, w * 0.6, Math.max(1, h * 0.016));
+    }
+    ctx.restore();
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   8. 소리 — 도미노가 부딪힐 때 합성한 클릭 (외부 음원 없음)
+   ══════════════════════════════════════════════════════════ */
+let actx = null, noiseBuf = null, soundOn = false;
+function audio() {
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+    const n = Math.floor(actx.sampleRate * 0.12);
+    noiseBuf = actx.createBuffer(1, n, actx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.2);
+  }
+  if (actx.state === "suspended") actx.resume();
+  return actx;
+}
+function tick(pitch, pan) {
+  if (!soundOn || !actx) return;
+  const t = actx.currentTime;
+  const src = actx.createBufferSource();
+  src.buffer = noiseBuf;
+  const bp = actx.createBiquadFilter();
+  bp.type = "bandpass"; bp.frequency.value = pitch; bp.Q.value = 4.5;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.34, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+  src.connect(bp); bp.connect(g);
+  if (actx.createStereoPanner) {
+    const p = actx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    g.connect(p); p.connect(actx.destination);
+  } else {
+    g.connect(actx.destination);
+  }
+  src.start(t); src.stop(t + 0.12);
+}
+function setSound(on) {
+  soundOn = on;
+  for (const id of ["sound", "sound2"]) {
+    const el = document.getElementById(id);
+    el.setAttribute("aria-pressed", on ? "true" : "false");
+    el.textContent = on ? "소리 끄기" : "소리 켜기";
+  }
+  if (on) { audio(); tick(880, 0); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   9. 텔레메트리 · 리빌
+   ══════════════════════════════════════════════════════════ */
+const $ = (id) => document.getElementById(id);
+const rFall = $("r-fall"), rAng = $("r-ang"), rHit = $("r-hit"), rTime = $("r-time"), rMode = $("r-mode");
+
+function paint() {
+  const f = toppledCount();
+  rFall.textContent = String(f);
+  rAng.textContent = maxAngle().toFixed(1) + "°";
+  rHit.textContent = String(hitCount);
+  rTime.textContent = elapsed.toFixed(2) + "초";
+  rMode.textContent = !started ? "대기 · 첫 번째 도미노를 밀어보세요"
+    : (f >= CFG.N ? "연쇄 종료 · 다시 세워보세요" : "연쇄 진행 중 " + f + "/" + CFG.N);
+  for (let i = 0; i < CFG.N; i++) {
+    const b = dominoes[i];
+    const on = Math.abs(b.a) > 0.3;
+    railBits[i].className = on ? (Math.abs(b.a) < 1.5 ? "on hot" : "on") : "";
+    if (on && !b.rv) { b.rv = true; revealDomino(i); }
+  }
+}
+function revealDomino(i) {
+  document.querySelectorAll('[data-domino="' + i + '"]').forEach((el) => el.classList.add("on"));
+}
+
+/* ══════════════════════════════════════════════════════════
+   10. 입력
+   ══════════════════════════════════════════════════════════ */
+function toWorld(ev) {
+  const r = cv.getBoundingClientRect();
+  return { x: cam + (ev.clientX - r.left) / scale, y: CFG.GROUND_Y + (ev.clientY - r.top - groundScreenY) / scale };
+}
+function hitTest(p) {
+  for (let i = CFG.N - 1; i >= 0; i--) if (pointOverlap(p.x, p.y, dominoes[i]) !== null) return i;
+  return -1;
+}
+
+cv.addEventListener("pointerdown", (ev) => {
+  const i = hitTest(toWorld(ev));
+  if (i < 0) return;
+  ev.preventDefault();
+  try { cv.setPointerCapture(ev.pointerId); } catch (_) {}
+  grabbing = true; grabIdx = i;
+  cv.classList.add("grabbing"); cv.classList.remove("armed");
+  const b = dominoes[i];
+  grabPrev = b.a;
+  b.im = 0; b.ii = 0; b.vx = b.vy = b.w = 0; b.sleep = false;
+  if (!started) { started = true; elapsed = 0; }
+}, { passive: false });
+
+cv.addEventListener("pointermove", (ev) => {
+  if (!grabbing) {
+    cv.classList.toggle("armed", hitTest(toWorld(ev)) >= 0);
+    return;
+  }
+  const b = dominoes[grabIdx];
+  const fx = b.footX(), fy = b.footY();
+  const p = toWorld(ev);
+  let a = Math.atan2(p.x - fx, -(p.y - fy));
+  a = Math.max(-1.35, Math.min(1.7, a));
+  b.setAngleAroundFoot(a);
+  b.vx = b.vy = b.w = 0;
+}, { passive: true });
+
+function endGrab() {
+  if (!grabbing) return;
+  const b = dominoes[grabIdx];
+  b.im = 1 / MASS; b.ii = INV_I;
+  b.w = Math.max(-16, Math.min(16, (b.a - grabPrev) * 60));
+  b.still = 0;
+  grabbing = false; grabIdx = -1;
+  cv.classList.remove("grabbing");
+}
+cv.addEventListener("pointerup", endGrab);
+cv.addEventListener("pointercancel", endGrab);
+
+/* ══════════════════════════════════════════════════════════
+   11. 카메라 · 스크롤 · 리빌
+   ══════════════════════════════════════════════════════════ */
+let scrollCam = 0, autoPushed = false;
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const smooth = reduce ? 1 : 0.14;
+const sda = CSS.supports && CSS.supports("animation-timeline: view()");
+if (sda && !reduce) document.documentElement.classList.add("sda");
+
+function readScroll() {
+  const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  scrollCam = Math.max(0, Math.min(1, window.scrollY / max)) * camMax();
+  if (!autoPushed && !reduce && window.scrollY > window.innerHeight * 0.3) {
+    autoPushed = true;
+    if (!started && toppledCount() === 0) push(0);
+  }
+}
+window.addEventListener("scroll", readScroll, { passive: true });
+window.addEventListener("resize", () => { resize(); readScroll(); render(); paint(); });
+
+if (!sda || reduce) {
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) if (e.isIntersecting) { e.target.classList.add("on"); io.unobserve(e.target); }
+  }, { rootMargin: "0px 0px -10% 0px", threshold: 0.12 });
+  document.querySelectorAll(".rv").forEach((el) => io.observe(el));
+}
+
+/* ══════════════════════════════════════════════════════════
+   12. 루프
+   ══════════════════════════════════════════════════════════ */
+let frameNo = 0;
+function frame() {
+  for (let s = 0; s < CFG.SUB; s++) if (!paused) step(CFG.DT);
+
+  if (pendingSounds.length && soundOn) {
+    for (const s of pendingSounds.slice(0, 3)) {
+      const idx = s.i === 0 ? 0 : s.i - 1;
+      const pan = ((s.x - cam) / viewW) * 2 - 1;
+      tick(760 + idx * 62, pan);
+    }
+  }
+
+  let front = CHAIN_MIN;
+  for (const d of dominoes) if (Math.abs(d.a) > 0.3 && d.x > front) front = d.x;
+  camAuto = Math.max(camAuto, Math.min(camMax(), Math.max(0, front - viewW * 0.42)));
+  cam += (Math.max(scrollCam, camAuto) - cam) * smooth;
+
+  render();
+  if (++frameNo % 5 === 0) paint();
+  requestAnimationFrame(frame);
+}
+
+/* ══════════════════════════════════════════════════════════
+   13. 컨트롤 · 검증 훅
+   ══════════════════════════════════════════════════════════ */
+function doPush() {
+  if (toppledCount() >= CFG.N) resetWorld();
+  if (!push(0)) { resetWorld(); push(0); }
+  autoPushed = true;
+  paint();
+}
+function doReset() { resetWorld(); autoPushed = false; }
+$("push").addEventListener("click", doPush);
+$("push2").addEventListener("click", doPush);
+$("reset").addEventListener("click", doReset);
+$("reset2").addEventListener("click", doReset);
+$("sound").addEventListener("click", () => setSound(!soundOn));
+$("sound2").addEventListener("click", () => setSound(!soundOn));
+window.addEventListener("keydown", (e) => {
+  if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if (e.key === "ArrowRight") doPush();
+  else if (e.key === "r" || e.key === "R") doReset();
+});
+document.addEventListener("visibilitychange", () => { paused = document.hidden; });
+
+window.__domino = {
+  push, reset: doReset, paint, setSound,
+  step: (sec) => { const n = Math.round(sec / CFG.DT); for (let i = 0; i < n; i++) step(CFG.DT); },
+  pause: (v) => { paused = !!v; },
+  state: () => ({
+    toppled: toppledCount(), maxAngleDeg: +maxAngle().toFixed(2), elapsed: +elapsed.toFixed(3),
+    contacts: contacts.length, hits: hitCount, cam: +cam.toFixed(2), started, paused,
+    angles: dominoes.map((d) => +(d.a * 180 / Math.PI).toFixed(2)),
+    xs: dominoes.map((d) => +d.x.toFixed(2)), ys: dominoes.map((d) => +d.y.toFixed(2)),
+    nan: dominoes.some((d) => ![d.x, d.y, d.a, d.vx, d.vy, d.w].every(Number.isFinite)),
+    sleeping: dominoes.filter((d) => d.sleep).length,
+    sda: !!sda, hiddenRv: [...document.querySelectorAll(".rv")].filter((e) => !e.classList.contains("on")).length,
+    view: { W, H, dpr, scale: +scale.toFixed(3), groundScreenY, viewW, camMax: +camMax().toFixed(1) },
+  }),
+  config: CFG,
+};
+
+resize();
+readScroll();
+for (let i = 0; i < 120; i++) step(CFG.DT);   // 초기 안정화
+cam = 0; camAuto = 0;
+render(); paint();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
