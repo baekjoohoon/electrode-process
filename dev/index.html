@@ -346,6 +346,7 @@ const mixing = (() => {
   const G = 24, cell = new Float32Array(G * G), blur = new Float32Array(G * G);
   const impR = 0.24 * N;
   let t = 0, uni = 0, cv0 = 0, cmin = 0, cmax = 0;
+  const hist = [];
 
   function reset() {
     F.u.fill(0); F.v.fill(0); F.d.fill(0); F.a.fill(0);
@@ -359,7 +360,7 @@ const mixing = (() => {
       }
     }
     while (k < NP) { px[k] = N / 2; py[k] = M / 2; k++; }
-    t = 0; cv0 = 0;
+    t = 0; cv0 = 0; hist.length = 0;
   }
   // 교반기 중심이 천천히 원을 그린다 → 시간 주기 유동(카오스 혼합).
   function impCenter() {
@@ -395,6 +396,9 @@ const mixing = (() => {
       const id = F.at(i < 1 ? 1 : i > N ? N : i, j < 1 ? 1 : j > M ? M : j);
       px[k] += F.u[id] * dt + (Math.random() - 0.5) * 1.7;      // 난류 확산(입자 랜덤워크)
       py[k] += F.v[id] * dt + (Math.random() - 0.5) * 1.7;
+      const cdx = px[k] - N / 2, cdy = py[k] - M / 2;
+      const rr = Math.hypot(cdx, cdy), RW = N * 0.47;
+      if (rr > RW) { px[k] = N / 2 + (cdx / rr) * (RW - 0.2); py[k] = M / 2 + (cdy / rr) * (RW - 0.2); }
       if (px[k] < 1) px[k] = 1; else if (px[k] > N) px[k] = N;
       if (py[k] < 1) py[k] = 1; else if (py[k] > M) py[k] = M;
     }
@@ -424,9 +428,16 @@ const mixing = (() => {
     const cv = mean > 0 ? Math.sqrt(Math.max(0, s2 / src.length - mean * mean)) / mean : 0;
     if (!cv0 && cv > 0.01) cv0 = cv;                       // 초기 불균일도를 기준으로 잡는다
     uni = cv0 > 0 ? clamp(1 - cv / cv0, 0, 1) : 0;         // 덩어리가 풀린 정도
+    if (!hist.length || t - hist[hist.length - 1][0] > 0.4) { hist.push([t, uni]); if (hist.length > 120) hist.shift(); }
     cmin = +cv.toFixed(3); cmax = +cv0.toFixed(3);
   }
   function render() {
+    const P = layoutPanels(0.66);
+    frameBox(P.main, "01", "STIRRED TANK · 상면", (26000).toLocaleString("ko-KR") + " particles");
+
+    const side = Math.min(P.main.w - 46, P.main.h - 96);
+    const ox = P.main.x + (P.main.w - side) / 2, oy = P.main.y + (P.main.h - side) / 2 + 8;
+
     const d = img.data;
     d.fill(0);
     let dmax = 1;
@@ -439,56 +450,107 @@ const mixing = (() => {
       const sp = Math.hypot(ux, vy);
       const bi = Math.min(G - 1, (px[k] / N * G) | 0), bj = Math.min(G - 1, (py[k] / M * G) | 0);
       const dens = Math.min(1, (cell[bj * G + bi] / dmax) * 1.7);
-      const a = 70 + 165 * dens;                       // 밀도가 높으면 진하게
-      const steps = sp > 5 ? Math.min(5, 1 + (sp / 12 | 0)) : 1;   // 빠르면 꼬리를 남긴다
+      const a = 60 + 170 * dens;
+      const steps = sp > 5 ? Math.min(5, 1 + (sp / 12 | 0)) : 1;
       for (let st = 0; st < steps; st++) {
         const bx = px[k] - ux * 0.013 * st, by = py[k] - vy * 0.013 * st;
         const gx = (bx * sx) | 0, gy = (by * sy) | 0;
         if (gx < 0 || gy < 0 || gx >= RES || gy >= RES) continue;
         const o = (gy * RES + gx) * 4;
-        const al = st === 0 ? a : a * 0.55;
+        const al = st === 0 ? a : a * 0.5;
         if (d[o + 3] < al) { d[o] = 16; d[o + 1] = 16; d[o + 2] = 16; d[o + 3] = al; }
       }
     }
     rx.putImageData(img, 0, 0);
-    const side = Math.min(world.w, world.h);
-    const ox = world.x + (world.w - side) / 2, oy = world.y + (world.h - side) / 2;
-    // 탱크 바닥의 옅은 음영
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ox, oy, side, side);
+    ctx.clip();
     const g = ctx.createLinearGradient(ox, oy, ox, oy + side);
-    g.addColorStop(0, "rgba(16,16,16,0.012)");
-    g.addColorStop(1, "rgba(16,16,16,0.05)");
+    g.addColorStop(0, "rgba(16,16,16,0.010)");
+    g.addColorStop(1, "rgba(16,16,16,0.045)");
     ctx.fillStyle = g;
     ctx.fillRect(ox, oy, side, side);
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(rc, ox, oy, side, side);
+    ctx.restore();
+    // 원형 탱크 벽 (바깥은 옅은 해칭, 벽은 2중 원)
+    const ccx = ox + side / 2, ccy = oy + side / 2, RWp = side * 0.47;
     ctx.save();
-    ctx.strokeStyle = "rgba(16,16,16,0.14)"; ctx.lineWidth = 1;
-    ctx.strokeRect(ox + 0.5, oy + 0.5, side - 1, side - 1);
-    // 교반기: 입체적으로 (허브 + 3엽 + 테두리)
+    ctx.beginPath(); ctx.rect(ox, oy, side, side); ctx.arc(ccx, ccy, RWp, 0, Math.PI * 2, true);
+    ctx.clip();
+    ctx.strokeStyle = INK + "0.055)"; ctx.lineWidth = 1;
+    for (let q = -side; q < side * 2; q += 7) { ctx.beginPath(); ctx.moveTo(ox + q, oy); ctx.lineTo(ox + q - side, oy + side); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = INK + "0.8)"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(ccx, ccy, RWp, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = INK + "0.25)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(ccx, ccy, RWp - 4, 0, Math.PI * 2); ctx.stroke();
+
+    // 교반기 (입체)
     const [icx, icy] = impCenter();
     const cx = ox + (icx / N) * side, cy = oy + (icy / M) * side, R = (impR / N) * side;
+    ctx.save();
     ctx.translate(cx, cy);
+    ctx.save();
+    ctx.shadowColor = "rgba(16,16,16,0.22)";
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 5;
+    ctx.fillStyle = CU + "0.035)";
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     const a0 = t * 2.4;
-    const cu = "rgba(180,83,31,";
     for (let b = 0; b < 3; b++) {
       const a = a0 + b * Math.PI * 2 / 3;
       ctx.save();
       ctx.rotate(a);
+      const gb = ctx.createLinearGradient(0, -R * 0.09, 0, R * 0.09);
+      gb.addColorStop(0, "rgba(214,120,70,0.98)");
+      gb.addColorStop(0.45, CU + "0.95)");
+      gb.addColorStop(1, "rgba(122,52,18,0.95)");
       ctx.beginPath();
-      ctx.moveTo(R * 0.18, -R * 0.075);
-      ctx.quadraticCurveTo(R * 0.72, -R * 0.13, R, -R * 0.03);
-      ctx.lineTo(R, R * 0.03);
-      ctx.quadraticCurveTo(R * 0.72, R * 0.06, R * 0.18, R * 0.075);
+      ctx.moveTo(R * 0.16, -R * 0.085);
+      ctx.quadraticCurveTo(R * 0.72, -R * 0.14, R, -R * 0.028);
+      ctx.lineTo(R, R * 0.032);
+      ctx.quadraticCurveTo(R * 0.72, R * 0.07, R * 0.16, R * 0.085);
       ctx.closePath();
-      ctx.fillStyle = cu + "0.92)"; ctx.fill();
-      ctx.strokeStyle = cu + "1)"; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.fillStyle = gb;
+      ctx.fill();
       ctx.restore();
     }
     ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2);
-    ctx.strokeStyle = cu + "0.35)"; ctx.lineWidth = 2.2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, 0, R * 0.11, 0, Math.PI * 2);
-    ctx.fillStyle = cu + "1)"; ctx.fill();
+    ctx.strokeStyle = CU + "0.30)"; ctx.lineWidth = 1.4; ctx.stroke();
+    const gh = ctx.createRadialGradient(-R * 0.03, -R * 0.03, 0, 0, 0, R * 0.13);
+    gh.addColorStop(0, "rgba(230,150,100,1)");
+    gh.addColorStop(1, "rgba(122,52,18,1)");
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.115, 0, Math.PI * 2); ctx.fillStyle = gh; ctx.fill();
     ctx.restore();
+
+    // 축 눈금 (탱크 폭 2 m 가정: 500 mm 간격)
+    for (let q = 1; q < 4; q++) {
+      const yy = oy + (side * q) / 4;
+      hair(0.14, ox - 5, yy, ox, yy);
+    }
+    scaleBar(ox + 8, oy + side + 18, side * 0.25, "500 mm");
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillText("탱크 Ø 2 m · 상면", ox, oy - 8);
+
+    // 보조: 덩어리 풀림 추이
+    const pts = hist.length > 1
+      ? hist.map((h) => [(h[0] - hist[0][0]) / Math.max(0.001, hist[hist.length - 1][0] - hist[0][0]), h[1]])
+      : [[0, uni], [1, uni]];
+    plotPanel(P.aux, {
+      title: "덩어리 풀림 추이",
+      xLabel: "t (s)", yLabel: "%",
+      series: [{ points: pts, color: CU + "0.95)", width: 1.4 },
+               { points: [[0, 0], [1, 0]], color: INK + "0.12)", width: 1 }],
+      legend: [{ name: "1 − 불균일/초기", color: CU + "0.95)" }],
+    });
+    ctx.fillStyle = INK + "0.95)"; ctx.font = "700 13px " + MONO;
+    ctx.fillText((uni * 100).toFixed(1) + "%", P.aux.x, P.aux.y + P.aux.h + 4);
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
+    ctx.fillText("불균일 지수 " + cmin.toFixed(2) + " · 전단 " + (F.maxSpeed() * 11).toFixed(0) + " 1/s", P.aux.x + 46, P.aux.y + P.aux.h + 4);
   }
   function pointer(x0, y0, dx, dy, kind) {
     if (kind === "down") { reset(); return; }
@@ -585,65 +647,123 @@ const coating = (() => {
     mean = n ? s / n : 0;
     cvv = mean > 1e-4 ? Math.sqrt(Math.max(0, s2 / n - mean * mean)) / mean : 0;
   }
+  const UM = 12.4;                                   // 셀 → µm 환산(웨트 두께 기준)
   function render() {
-    // 1) 격자 상태를 흐린 배경으로 (미세 구조)
-    const px = img.data;
-    for (let j = 1; j <= M; j++) {
-      for (let i = 1; i <= N; i++) {
-        const k = F.at(i, j), o = ((j - 1) * N + (i - 1)) * 4;
-        const d = clamp(F.d[k], 0, 1);
-        const sh = Math.pow(1 - d, 1.6) * 255;
-        px[o] = Math.min(255, sh + 6); px[o + 1] = sh + 2; px[o + 2] = sh * 0.98; px[o + 3] = 255;
-      }
-    }
-    x.putImageData(img, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(c, world.x, world.y, world.w, world.h);
+    const P = layoutPanels(0.60);
+    frameBox(P.main, "02", "SLOT-DIE COATING · 단면", "wet film on Cu foil");
 
-    // 2) 유막 단면을 벡터로 다시 그린다 — 선명한 상단 경계
-    const padY = world.h * 0.62;                     // 기판 위 여유 공간
-    const base = world.y + world.h - 1.5;
+    const x0 = P.main.x + 34, x1 = P.main.x + P.main.w - 58;
+    const W2 = x1 - x0;
+    const base = P.main.y + P.main.h - 78;          // 박 윗면
+    let maxUm = 0.6;
+    for (let i = 1; i <= N; i++) maxUm = Math.max(maxUm, filmCol(i) * UM * 0.0189);
+    const span = Math.ceil(maxUm * 1.35 * 2) / 2;   // 눈금 상한(µm)
+    const pxPerUm = (P.main.h * 0.46) / span;
+
+    // 집전체(구리박) 단면 + 해칭
+    ctx.fillStyle = CU + "0.9)";
+    ctx.fillRect(x0, base, W2, 7);
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(world.x, base);
-    for (let i = 1; i <= N; i++) {
-      const hh = filmCol(i);
-      const gx = world.x + ((i - 1) / (N - 1)) * world.w;
-      ctx.lineTo(gx, base - (hh / M) * padY);
-    }
-    ctx.lineTo(world.x + world.w, base);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(16,16,16,0.9)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(16,16,16,0.95)"; ctx.lineWidth = 1;
-    ctx.stroke();
-    // 집전체(구리박)
-    ctx.fillStyle = "rgba(180,83,31,0.95)";
-    ctx.fillRect(world.x, base, world.w, 3.5);
-    // 블레이드 단면
-    const bx = world.x + (BX / N) * world.w, by = world.y + world.h - (gap / M) * padY - 1.5;
-    ctx.fillStyle = "rgba(16,16,16,0.22)";
-    ctx.beginPath();
-    ctx.moveTo(world.x, world.y);
-    ctx.lineTo(bx, world.y);
-    ctx.lineTo(bx, by);
-    ctx.lineTo(bx - 16, by);
-    ctx.lineTo(bx - 16, world.y + 14);
-    ctx.lineTo(world.x, world.y + 14);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(16,16,16,0.45)"; ctx.lineWidth = 1; ctx.stroke();
-    // 눈금 (10 µm 간격)
-    ctx.strokeStyle = "rgba(16,16,16,0.25)";
-    ctx.fillStyle = "rgba(113,113,106,1)";
-    ctx.font = "10px ui-monospace, monospace";
-    for (let g = 1; g <= 3; g++) {
-      const y = base - (g * 10 / 12.4 / M) * padY * M / M;
-      const yy = base - (g * 10 / 12.4) / M * padY;
-      ctx.beginPath(); ctx.moveTo(world.x + world.w - 34, yy); ctx.lineTo(world.x + world.w - 24, yy); ctx.stroke();
-      ctx.fillText((g * 10) + "µm", world.x + world.w - 22, yy + 3.5);
-    }
+    ctx.beginPath(); ctx.rect(x0, base, W2, 7); ctx.clip();
+    ctx.strokeStyle = CU + "0.45)"; ctx.lineWidth = 1;
+    for (let q = -10; q < W2; q += 6) { ctx.beginPath(); ctx.moveTo(x0 + q, base + 7); ctx.lineTo(x0 + q + 7, base); ctx.stroke(); }
     ctx.restore();
+
+    // 유막 단면 (두께 프로파일)
+    const raw = [];
+    for (let i = 1; i <= N; i++) raw.push(filmCol(i));
+    const prof = [];
+    for (let i = 0; i < N; i++) {
+      let ac = 0, n2 = 0;
+      for (let q = -4; q <= 4; q++) { const ii = i + q; if (ii >= 0 && ii < N) { ac += raw[ii]; n2++; } }
+      prof.push([i / (N - 1), (ac / n2) * UM * 0.0189]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(x0, base);
+    for (let i = 0; i < prof.length; i++) ctx.lineTo(x0 + prof[i][0] * W2, base - prof[i][1] * pxPerUm);
+    ctx.lineTo(x1, base);
+    ctx.closePath();
+    const gf = ctx.createLinearGradient(0, base - 40, 0, base);
+    gf.addColorStop(0, "rgba(28,28,30,0.96)");
+    gf.addColorStop(1, "rgba(8,8,9,0.98)");
+    ctx.fillStyle = gf;
+    ctx.fill();
+    ctx.strokeStyle = INK + "0.9)"; ctx.lineWidth = 1; ctx.stroke();
+
+    // 블레이드 단면 (입체)
+    const bx = x0 + (BX / N) * W2, by = base - (gap / M) * (P.main.h * 0.42);
+    ctx.beginPath();
+    ctx.moveTo(x0 - 12, P.main.y + 46);
+    ctx.lineTo(bx, P.main.y + 46);
+    ctx.lineTo(bx, by);
+    ctx.lineTo(bx - 13, by + 4);
+    ctx.lineTo(bx - 13, P.main.y + 46);
+    ctx.closePath();
+    ctx.beginPath();
+    ctx.moveTo(bx - 34, P.main.y + 30);
+    ctx.lineTo(bx - 4, P.main.y + 30);
+    ctx.lineTo(bx - 4, P.main.y + 44);
+    ctx.lineTo(bx - 34, P.main.y + 44);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(214,212,206,1)"; ctx.fill();
+    ctx.strokeStyle = INK + "0.3)"; ctx.lineWidth = 1; ctx.stroke();
+    const gb = ctx.createLinearGradient(bx - 13, 0, bx, 0);
+    gb.addColorStop(0, "rgba(196,194,188,1)");
+    gb.addColorStop(0.55, "rgba(232,230,225,1)");
+    gb.addColorStop(1, "rgba(146,144,138,1)");
+    ctx.fillStyle = gb; ctx.fill();
+    ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillText("다이", bx - 34, P.main.y + 40);
+
+    // 틈새 치수선
+    const dimX = bx + 26;
+    ctx.strokeStyle = CU + "0.9)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(dimX, by + 2); ctx.lineTo(dimX, base - 2);
+    ctx.moveTo(dimX - 3, by + 5); ctx.lineTo(dimX + 3, by + 5);
+    ctx.moveTo(dimX - 3, base - 5); ctx.lineTo(dimX + 3, base - 5);
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(dimX + 11, (by + base) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = CU + "1)"; ctx.font = "600 10px " + MONO; ctx.textAlign = "center";
+    ctx.fillText((gap * 2.2).toFixed(0) + " µm", 0, 0);
+    ctx.textAlign = "start";
+    ctx.restore();
+
+    // 세로 축 (µm) — 축선 + 눈금 + 값
+    const step2 = span <= 2 ? 0.5 : span <= 5 ? 1 : 2;
+    ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(x1 + 14) + 0.5, Math.round(base) + 0.5);
+    ctx.lineTo(Math.round(x1 + 14) + 0.5, Math.round(base - span * pxPerUm) + 0.5);
+    ctx.stroke();
+    for (let g2 = 0; g2 <= span + 0.001; g2 += step2) {
+      const yy = base - g2 * pxPerUm;
+      hair(0.35, x1 + 14, yy, x1 + 19, yy);
+      ctx.fillStyle = MU + "1)"; ctx.font = "500 9px " + MONO;
+      ctx.fillText(g2.toFixed(step2 < 1 ? 1 : 0), x1 + 22, yy + 3);
+    }
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillText("µm", x1 + 22, base - span * pxPerUm - 9);
+
+    scaleBar(x0, base + 34, Math.min(W2 * 0.34, 150), "10 mm");
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillText("Cu foil 8 µm · 단면 방향 과장 ×" + Math.round((pxPerUm * 7) / (W2 / 10)), x0, base + 54);
+
+    // 보조: 두께 프로파일
+    plotPanel(P.aux, {
+      title: "웨트 두께 프로파일 h(x)",
+      xLabel: "웹 진행 방향", yLabel: "µm",
+      series: [{ points: prof.map(([u, v]) => [u, Math.min(1, v / span)]), color: INK + "0.9)", width: 1.4 },
+               { points: [[0, Math.min(1, (mean * UM) / span)], [1, Math.min(1, (mean * UM) / span)]], color: CU + "0.5)", width: 1 }],
+      legend: [{ name: "측정", color: INK + "0.9)" }, { name: "목표", color: CU + "0.5)" }],
+    });
+    ctx.fillStyle = INK + "0.9)"; ctx.font = "600 11px " + MONO;
+    ctx.fillText((mean * UM).toFixed(1) + " µm", P.aux.x, P.aux.y + P.aux.h + 4);
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
+    ctx.fillText("편차 " + (cvv * 100).toFixed(1) + "% · 코팅 " + len.toFixed(0) + "%", P.aux.x + 62, P.aux.y + P.aux.h + 4);
   }
   function pointer(x0, y0, dx, dy) {
     const gx = ((x0 - world.x) / world.w) * N, gy = ((y0 - world.y) / world.h) * M;
@@ -740,30 +860,77 @@ const drying = (() => {
     for (let k = 0; k < b.length; k++) b[k] = clamp(b[k], 0, 4);
   }
   function render() {
+    const P = layoutPanels(0.54);
+    frameBox(P.main, "03", "DRYING · 단면", "증발면 / 집전체");
+    const rx0 = P.main.x + 34, ry0 = P.main.y + 62;
+    const rw = P.main.w - 92, rh = P.main.h - 150;
+
+    // 필드
     const px = img.data;
     for (let j = 0; j < M; j++) {
       for (let i = 0; i < N; i++) {
         const k = idx(i, j), o = ((M - 1 - j) * N + i) * 4;
         const wet = clamp(c[k] / 1.15, 0, 1);
-        const extra = clamp(b[k] - 1, 0, 1);              // 표면으로 올라온 바인더
-        let r = Math.pow(1 - wet, 0.85) * 255, g = r, bl = r;
-        if (extra > 0.002) {
-          r = r * (1 - extra * 0.85) + cuRGB[0] * extra * 0.85;
-          g = g * (1 - extra * 0.85) + cuRGB[1] * extra * 0.85;
-          bl = bl * (1 - extra * 0.85) + cuRGB[2] * extra * 0.85;
-        }
+        const extra = clamp(b[k] - 1, 0, 1.6);
+        let r = Math.pow(1 - wet, 0.8) * 255, g = r, bl = r * 0.97;
+        const t2 = Math.min(1, extra * 0.9);
+        r = r * (1 - t2) + cuRGB[0] * t2;
+        g = g * (1 - t2) + cuRGB[1] * t2;
+        bl = bl * (1 - t2) + cuRGB[2] * t2;
         px[o] = r; px[o + 1] = g; px[o + 2] = bl; px[o + 3] = 255;
       }
     }
     x.putImageData(img, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(cvs, world.x, world.y, world.w, world.h);
-    ctx.save();
-    ctx.strokeStyle = "rgba(16,16,16,0.3)"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(world.x, world.y - 0.5); ctx.lineTo(world.x + world.w, world.y - 0.5); ctx.stroke();
-    ctx.fillStyle = "rgba(16,16,16,0.45)"; ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
-    ctx.fillText("증발면", world.x + 6, world.y - 8);
-    ctx.restore();
+    ctx.drawImage(cvs, rx0, ry0, rw, rh);
+    ctx.strokeStyle = INK + "0.5)"; ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(rx0) + 0.5, Math.round(ry0) + 0.5, Math.round(rw), Math.round(rh));
+
+    // 증발면 / 집전체 라벨
+    ctx.fillStyle = INK + "0.85)"; ctx.font = "500 10px " + MONO;
+    ctx.fillText("증발면 (표면)", rx0, ry0 - 8);
+    ctx.fillStyle = CU + "1)";
+    ctx.fillText("집전체 (Cu foil)", rx0, ry0 + rh + 15);
+    ctx.fillStyle = MU + "1)";
+    ctx.fillText("용매 많은 상태 → 어두움", rx0, ry0 + rh + 30);
+
+    // 깊이 축 (µm)
+    const depthUm = 100;
+    ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(rx0 + rw + 12) + 0.5, Math.round(ry0) + 0.5);
+    ctx.lineTo(Math.round(rx0 + rw + 12) + 0.5, Math.round(ry0 + rh) + 0.5);
+    ctx.stroke();
+    for (let g3 = 0; g3 <= 100; g3 += 25) {
+      const yy = ry0 + (g3 / depthUm) * rh;
+      hair(0.35, rx0 + rw + 12, yy, rx0 + rw + 17, yy);
+      ctx.fillStyle = MU + "1)"; ctx.font = "500 9px " + MONO;
+      ctx.fillText(String(g3), rx0 + rw + 20, yy + 3);
+    }
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillText("µm", rx0 + rw + 20, ry0 - 8);
+    scaleBar(rx0, ry0 + rh + 52, rw * 0.3, "5 cm (web 폭)");
+
+    // 보조: 깊이별 용매 / 바인더 프로파일
+    const cProf = [], bProf = [];
+    for (let j = 0; j < M; j += 2) {
+      let cc = 0, bb = 0;
+      for (let i = 0; i < N; i++) { cc += c[idx(i, j)]; bb += b[idx(i, j)]; }
+      const u = j / (M - 1);
+      cProf.push([u, Math.min(1, cc / N / 1.15)]);
+      bProf.push([u, Math.min(1, (bb / N) / 3.2)]);
+    }
+    plotPanel(P.aux, {
+      title: "깊이별 분포",
+      xLabel: "표면 → 집전체", yLabel: "상대 농도",
+      series: [{ points: cProf, color: INK + "0.9)", width: 1.4 },
+               { points: bProf, color: CU + "0.95)", width: 1.4 }],
+      legend: [{ name: "용매", color: INK + "0.9)" }, { name: "바인더", color: CU + "0.95)" }],
+    });
+    ctx.fillStyle = INK + "0.9)"; ctx.font = "600 11px " + MONO;
+    ctx.fillText("표면 바인더 " + mig.toFixed(2) + "배", P.aux.x, P.aux.y + P.aux.h + 4);
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
+    ctx.fillText("잔류 용매 " + (100 - prog).toFixed(1) + "%", P.aux.x, P.aux.y + P.aux.h + 18);
   }
   function pointer(x0, y0, dx, dy) {
     const gx = ((x0 - world.x) / world.w) * N;
@@ -819,7 +986,9 @@ const calendering = (() => {
 
   function reset() {
     parts.length = 0;
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) parts.push({ x: c * SP + 1.2, y: r * SP + 1, crush: 0 });
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      parts.push({ x: c * SP + 1.2 + (Math.random() - 0.5) * 0.5, y: r * SP + 1 + (Math.random() - 0.5) * 0.5, crush: 0 });
+    }
   }
   // 롤 간격(µm) → 목표 두께. 100µm 를 넘으면 눌리지 않는다.
   function targetH() { return T0 * Math.min(1, gapUm / 100); }
@@ -850,32 +1019,94 @@ const calendering = (() => {
     return { ymin, ymax };
   }
   function render() {
-    const span = COLS * SP + 2.4;
-    const S = Math.min(world.w / span, world.h / (T0 + 6));
-    const ox = world.x + (world.w - span * S) / 2;
-    const oy = world.y + (world.h - (T0 + 6) * S) / 2;
+    const P = layoutPanels(0.62);
+    frameBox(P.main, "04", "CALENDERING · 단면", "roll gap " + gapUm.toFixed(0) + " µm");
+
+    const spanX = COLS * SP + 2;
+    const sc = Math.min((P.main.w - 120) / spanX, (P.main.h - 170) / (T0 + 10));
+    const ox = P.main.x + 60, oy = P.main.y + 96;
+    const X = (v) => ox + v * sc, Y = (v) => oy + v * sc;
     const h = targetH(), floorY = T0 + 1.5, topY = floorY - h;
-    const px = (v) => ox + v * S, py = (v) => oy + v * S;
+
+    // 위·아래 롤러 (곡률이 있는 호)
+    const Rroll = spanX * 1.9;
+    const cxr = ox + (spanX * sc) / 2;
     ctx.save();
-    ctx.fillStyle = "#e7e5e0";                       // 아래 롤러
-    ctx.fillRect(ox, py(floorY), span * S, world.h);
-    ctx.fillStyle = "#cfcdc7";
-    ctx.fillRect(ox, py(floorY), span * S, 3);
-    const sx = 1 + red * 0.34, sy = 1 - red * 0.34;   // 눌린 입자는 타원으로 변형
-    for (const p of parts) {
-      const hot = crush > 1 && p.y > topY + h * 0.35;
+    ctx.beginPath();
+    ctx.rect(P.main.x + 30, P.main.y + 40, P.main.w - 60, P.main.h - 110);
+    ctx.clip();
+    // 아래 롤러
+    ctx.beginPath();
+    ctx.arc(cxr, Y(floorY) + Rroll * sc, Rroll * sc, Math.PI, Math.PI * 2);
+    ctx.lineTo(P.main.x + P.main.w, P.main.y + P.main.h);
+    ctx.lineTo(P.main.x, P.main.y + P.main.h);
+    ctx.closePath();
+    const gDown = ctx.createLinearGradient(0, Y(floorY), 0, Y(floorY) + 90);
+    gDown.addColorStop(0, "rgba(232,230,225,1)");
+    gDown.addColorStop(1, "rgba(186,184,178,1)");
+    ctx.fillStyle = gDown; ctx.fill();
+    ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1; ctx.stroke();
+    // 위 롤러
+    ctx.beginPath();
+    ctx.arc(cxr, Y(topY) - Rroll * sc, Rroll * sc, 0, Math.PI);
+    ctx.lineTo(P.main.x + P.main.w, P.main.y);
+    ctx.lineTo(P.main.x, P.main.y);
+    ctx.closePath();
+    const gUp = ctx.createLinearGradient(0, Y(topY) - 80, 0, Y(topY));
+    gUp.addColorStop(0, "rgba(150,148,142,1)");
+    gUp.addColorStop(1, "rgba(214,212,206,1)");
+    ctx.fillStyle = gUp; ctx.fill();
+    ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1; ctx.stroke();
+
+    // 입자 (지터 + 압축 변형)
+    const sx = 1 + red * 0.30, sy = 1 - red * 0.30;
+    for (let q = 0; q < parts.length; q++) {
+      const pt = parts[q];
+      const rr = R * 0.86 + ((q * 37) % 11) / 11 * R * 0.3;
+      const hot = crush > 1 && pt.y > topY + h * 0.4;
       ctx.beginPath();
-      ctx.ellipse(px(p.x), py(p.y), R * S * sx, R * S * sy, 0, 0, Math.PI * 2);
-      ctx.fillStyle = hot ? "rgba(180,83,31,0.85)" : "rgba(16,16,16,0.86)";
+      ctx.ellipse(X(pt.x), Y(pt.y), rr * sc * sx, rr * sc * sy, 0, 0, Math.PI * 2);
+      ctx.fillStyle = hot ? CU + "0.92)" : "rgba(16,16,16,0.88)";
       ctx.fill();
     }
-    ctx.fillStyle = "#8f8d88";                        // 위 롤러
-    ctx.fillRect(ox, world.y - 2, span * S, Math.max(2, py(topY) - world.y));
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.fillRect(ox, py(topY) - 2, span * S, 2);
-    ctx.strokeStyle = "rgba(180,83,31,0.75)"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(px(parts[0].x) - 4, py(T0 + 3)); ctx.lineTo(px(parts[COLS - 1].x) + 4, py(T0 + 3)); ctx.stroke();
     ctx.restore();
+
+    // 닙 표시 + 간격 치수선
+    const nipY = (Y(topY) + Y(floorY)) / 2;
+    ctx.strokeStyle = CU + "0.9)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(X(spanX) - 6, Y(topY)); ctx.lineTo(X(spanX) + 22, Y(topY));
+    ctx.moveTo(X(spanX) - 6, Y(floorY)); ctx.lineTo(X(spanX) + 22, Y(floorY));
+    ctx.moveTo(X(spanX) + 16, Y(topY) + 3); ctx.lineTo(X(spanX) + 16, Y(floorY) - 3);
+    ctx.stroke();
+    ctx.fillStyle = CU + "1)"; ctx.font = "600 10px " + MONO;
+    ctx.fillText(gapUm.toFixed(0) + " µm", X(spanX) + 20, nipY + 3);
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillText("롤", X(spanX) + 20, Y(topY) - 8);
+    ctx.fillText("롤", X(spanX) + 20, Y(floorY) + 14);
+
+    scaleBar(ox, oy + (T0 + 8) * sc, spanX * sc * 0.22, "20 mm");
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillText("입자 " + parts.length + "개 · 압축 " + (red * 100).toFixed(0) + "%", ox, oy + (T0 + 8) * sc + 30);
+
+    // 보조: 층 두께 방향 압축률 분포
+    const rows = [];
+    for (let r = 0; r < ROWS; r++) {
+      let ac = 0;
+      for (let c = 0; c < COLS; c++) ac += parts[r * COLS + c].crush;
+      rows.push([r / (ROWS - 1), Math.min(1, (ac / COLS) * 4)]);
+    }
+    plotPanel(P.aux, {
+      title: "층 두께 방향 압축률",
+      xLabel: "상부 → 하부", yLabel: "상대 압축",
+      series: [{ points: rows, color: CU + "0.95)", width: 1.5 },
+               { points: [[0, Math.min(1, red)], [1, Math.min(1, red)]], color: INK + "0.25)", width: 1 }],
+      legend: [{ name: "입자", color: CU + "0.95)" }, { name: "평균", color: INK + "0.25)" }],
+    });
+    ctx.fillStyle = INK + "0.9)"; ctx.font = "600 11px " + MONO;
+    ctx.fillText(den.toFixed(2) + " g/cc", P.aux.x, P.aux.y + P.aux.h + 4);
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
+    ctx.fillText("두께 " + thickUm.toFixed(0) + "µm · 공극 " + por.toFixed(0) + "% · 파쇄 " + crush.toFixed(0) + "%", P.aux.x + 76, P.aux.y + P.aux.h + 4);
   }
   reset();
   return {
@@ -894,6 +1125,124 @@ const calendering = (() => {
     gapV: () => gapUm.toFixed(0) + " µm",
   };
 })();
+
+
+/* ══════════════════════════════════════════════════════════
+   계기판 크롬 — 축·눈금·스케일 바·보조 차트 (모든 장면 공용)
+   ══════════════════════════════════════════════════════════ */
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", PretendardSubset, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+const INK = "rgba(16,16,16,", CU = "rgba(180,83,31,", MU = "rgba(113,113,106,";
+
+function hair(a, x1, y1, x2, y2, w) {
+  ctx.strokeStyle = INK + (a == null ? 0.22 : a) + ")";
+  ctx.lineWidth = w || 1;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(x1) + 0.5, Math.round(y1) + 0.5);
+  ctx.lineTo(Math.round(x2) + 0.5, Math.round(y2) + 0.5);
+  ctx.stroke();
+}
+
+// 주 패널 상자 + 모서리 틱 + 번호/제목 블록
+function frameBox(r, no, title, sub) {
+  ctx.strokeStyle = INK + "0.55)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
+  const t = 10;
+  const cs = [[r.x, r.y, 1, 1], [r.x + r.w, r.y, -1, 1], [r.x, r.y + r.h, 1, -1], [r.x + r.w, r.y + r.h, -1, -1]];
+  for (const [cx, cy, sx, sy] of cs) {
+    ctx.strokeStyle = INK + "0.85)";
+    ctx.beginPath();
+    ctx.moveTo(Math.round(cx + sx * t) + 0.5, Math.round(cy) + 0.5);
+    ctx.lineTo(Math.round(cx) + 0.5, Math.round(cy) + 0.5);
+    ctx.lineTo(Math.round(cx) + 0.5, Math.round(cy + sy * t) + 0.5);
+    ctx.stroke();
+  }
+  ctx.save();
+  ctx.fillStyle = INK + "0.95)";
+  ctx.font = "600 11px " + MONO;
+  ctx.fillText(no, r.x + 15, r.y + 19);
+  ctx.fillStyle = MU + "1)";
+  ctx.font = "500 10px " + MONO;
+  ctx.fillText(title, r.x + 15, r.y + 31);
+  if (sub) { ctx.fillStyle = INK + "0.6)"; ctx.font = "500 10px " + MONO; ctx.textAlign = "right"; ctx.fillText(sub, r.x + r.w - 15, r.y + 19); ctx.textAlign = "start"; }
+  ctx.restore();
+}
+
+// 스케일 바 (px 길이 + 라벨)
+function scaleBar(x, y, px, label) {
+  ctx.save();
+  ctx.strokeStyle = INK + "0.75)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 0.5, y); ctx.lineTo(x + 0.5, y + 5);
+  ctx.moveTo(x + px + 0.5, y); ctx.lineTo(x + px + 0.5, y + 5);
+  ctx.moveTo(x + 0.5, y + 2.5); ctx.lineTo(x + px + 0.5, y + 2.5);
+  ctx.stroke();
+  ctx.fillStyle = MU + "1)";
+  ctx.font = "500 10px " + MONO;
+  ctx.textAlign = "center";
+  ctx.fillText(label, x + px / 2, y - 5);
+  ctx.textAlign = "start";
+  ctx.restore();
+}
+
+// 보조 차트: 축 + 격자 + 곡선들
+function plotPanel(r, opt) {
+  ctx.save();
+  ctx.strokeStyle = INK + "0.35)";
+  ctx.lineWidth = 1;
+  const ax = r.x + 30, ay = r.y + 20, aw = r.w - 44, ah = r.h - 56;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(ax) + 0.5, Math.round(ay) + 0.5);
+  ctx.lineTo(Math.round(ax) + 0.5, Math.round(ay + ah) + 0.5);
+  ctx.lineTo(Math.round(ax + aw) + 0.5, Math.round(ay + ah) + 0.5);
+  ctx.stroke();
+  ctx.fillStyle = INK + "0.9)";
+  ctx.font = "600 10px " + MONO;
+  ctx.fillText(opt.title || "", r.x, r.y + 8);
+  // 곡선
+  for (const s of opt.series) {
+    ctx.strokeStyle = s.color || INK + "0.9)";
+    ctx.lineWidth = s.width || 1.2;
+    ctx.beginPath();
+    let first = true;
+    for (const [u, v] of s.points) {
+      const px = ax + u * aw, py = ay + ah - v * ah;
+      if (first) { ctx.moveTo(px, py); first = false; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  // 축 라벨
+  ctx.fillStyle = MU + "1)";
+  ctx.font = "500 9.5px " + MONO;
+  ctx.fillText(opt.xLabel || "", ax + aw - ctx.measureText(opt.xLabel || "").width, ay + ah + 13);
+  ctx.save();
+  ctx.translate(ax - 8, ay + ah - ctx.measureText(opt.yLabel || "").width);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(opt.yLabel || "", 0, 0);
+  ctx.restore();
+  if (opt.legend) {
+    let lx = ax + 4;
+    for (const s of opt.legend) {
+      ctx.fillStyle = s.color;
+      ctx.fillRect(lx, ay + ah + 20, 8, 2);
+      ctx.fillStyle = MU + "1)";
+      ctx.fillText(s.name, lx + 12, ay + ah + 23);
+      lx += 14 + ctx.measureText(s.name).width;
+    }
+  }
+  ctx.restore();
+}
+
+// 장면 배치: 주 패널(좌) + 보조 패널(우)
+function layoutPanels(mainRatio) {
+  const gap = Math.max(18, world.w * 0.035);
+  const mw = world.w * (mainRatio || 0.60);
+  return {
+    main: { x: world.x, y: world.y, w: mw, h: world.h },
+    aux: { x: world.x + mw + gap, y: world.y + world.h * 0.06, w: world.w - mw - gap, h: world.h * 0.52 },
+  };
+}
 
 const SCENES = { mixing, coating, drying, calendering };
 let active = mixing, fade = 0, activeName = "mixing";
