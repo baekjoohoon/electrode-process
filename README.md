@@ -3,7 +3,8 @@
 제1회 해커톤: 랜딩톤 출품작. 도미노 12개 세트를 소개하는 **한 장짜리 랜딩 페이지**이며,
 페이지 하단 무대에서 **직접 작성한 2D 강체 물리 엔진**이 실시간으로 도미노를 시뮬레이션합니다.
 
-- 공개 주소: (배포 후 기입)
+- 공개 주소: https://domino12.baekjoohoon.workers.dev (Cloudflare Workers, 배포 디렉터리 `public/`)
+- 저장소: https://github.com/baekjoohoon/domino12
 - 제출 마감: 2026년 12월 4일 (KST)
 
 ## 무엇을 보여 주는가
