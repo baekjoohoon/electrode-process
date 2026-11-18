@@ -55,6 +55,15 @@ tools/
 LICENSE-Pretendard.txt          # SIL Open Font License 1.1 전문
 ```
 
+## 데모 영상 · 스크린샷
+
+- 데모 영상(13초, 소리 없음): [`docs/domino12-demo.mp4`](docs/domino12-demo.mp4)
+- 스크린샷: [`docs/screenshots/`](docs/screenshots/) — 커버(세워진 상태), 연쇄 중(붉은 파동), 본문, 물리 엔진 구간, 모바일
+
+| 커버 | 연쇄 중 | 모바일 |
+|---|---|---|
+| ![커버](docs/screenshots/01-cover-hero.png) | ![연쇄](docs/screenshots/02-chain-wave.png) | ![모바일](docs/screenshots/05-mobile.png) |
+
 ## 로컬 실행
 
 ```bash

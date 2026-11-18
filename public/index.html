@@ -144,6 +144,7 @@
 
   @media (max-width:720px){
     body{font-size:16px}
+    .brand{flex-direction:column;align-items:flex-start;gap:3px}
     .specs{grid-template-columns:repeat(2,1fr)}
     .steps{grid-template-columns:1fr;gap:24px}
     .cell{grid-template-columns:44px 1fr;gap:6px 12px}
@@ -940,6 +941,16 @@ window.__domino = {
   push, reset: doReset, paint, setSound,
   step: (sec) => { const n = Math.round(sec / CFG.DT); for (let i = 0; i < n; i++) step(CFG.DT); },
   pause: (v) => { paused = !!v; },
+  // 녹화·검증용: 주어진 스크롤 위치로 옮기고 카메라를 즉시 목표치에 맞춘 뒤 한 프레임 그린다
+  settle: (scrollY) => {
+    if (typeof scrollY === "number") window.scrollTo({ top: scrollY, behavior: "instant" });
+    readScroll();
+    let front = CHAIN_MIN;
+    for (const d of dominoes) if (Math.abs(d.a) > 0.3 && d.x > front) front = d.x;
+    camAuto = Math.max(camAuto, Math.min(camMax(), Math.max(0, front - viewW * 0.42)));
+    cam = Math.max(scrollCam, camAuto);
+    render(); paint();
+  },
   state: () => ({
     toppled: toppledCount(), maxAngleDeg: +maxAngle().toFixed(2), elapsed: +elapsed.toFixed(3),
     contacts: contacts.length, hits: hitCount, cam: +cam.toFixed(2), started, paused,
