@@ -144,7 +144,7 @@
           <span>잔류 용매 <b id="d-res">—</b></span>
           <span>건조 진행 <b id="d-prog">—</b></span>
           <span>바인더 편중 <b id="d-mig">—</b></span>
-          <span>표면/내부 <b id="d-ratio">—</b></span>
+          
         </div>
       </div>
     </div>
@@ -574,8 +574,8 @@ const mixing = (() => {
     name: "MIXING", hint: "마우스로 휘젓기 · 클릭하면 처음부터",
     step, render, pointer,
     metrics: () => [
-      ["덩어리 풀림", (uni * 100).toFixed(1) + " %"],
       ["불균일 지수", cmin.toFixed(2)],
+      ["덩어리 풀림", (uni * 100).toFixed(1) + " %"],
       ["최대 전단", (F.maxSpeed() * 11).toFixed(0) + " 1/s"],
     ],
     probe: () => {
@@ -945,7 +945,6 @@ const drying = (() => {
     metrics: () => [
       ["잔류 용매", (100 - prog).toFixed(1) + " %"],
       ["건조 진행", prog.toFixed(1) + " %"],
-      ["표면/내부 용매", surfRatio().toFixed(2)],
       ["표면 바인더", mig.toFixed(2) + " 배"],
     ],
     chips: () => ({ "d-res": (100 - prog).toFixed(1) + " %", "d-prog": prog.toFixed(0) + " %", "d-mig": mig.toFixed(2) + " 배", "d-ratio": surfRatio().toFixed(2) }),
@@ -1259,6 +1258,7 @@ function setScene(name) {
   $("hud-name").textContent = n;
   $("hud-hint").textContent = active ? active.hint : "공정 요약";
   if (active && active.reset && name === "drying") active.reset();
+  paintHud();
 }
 const stageEls = [...document.querySelectorAll(".stage")];
 let pickT = 0;
