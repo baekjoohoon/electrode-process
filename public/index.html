@@ -678,12 +678,14 @@ function stageHeight() {
   const hero = clampN(vh * (mobile ? 0.44 : 0.42) * k, short ? 132 : (mobile ? 200 : 210), 430);
   const reading = clampN(vh * (mobile ? 0.31 : 0.29) * k, short ? 112 : 165, 330);
   const p = clampN(window.scrollY / Math.max(1, vh * 0.7), 0, 1);
-  const want = hero + (reading - hero) * p;
-  if (Math.abs(want - shNow) > 1 || Math.abs(reading - shPad) > 1) {
-    shNow = want; shPad = reading;
+  // 8px 단위로 양자화 — 스크롤 중 캔버스 백킹 스토어를 매 프레임 재할당하지 않는다
+  const want = Math.round((hero + (reading - hero) * p) / 8) * 8;
+  const pad = Math.round(reading / 8) * 8;
+  if (want !== shNow || pad !== shPad) {
+    shNow = want; shPad = pad;
     const root = document.documentElement.style;
-    root.setProperty("--sh", shNow.toFixed(1) + "px");
-    root.setProperty("--sh-pad", shPad.toFixed(1) + "px");
+    root.setProperty("--sh", shNow + "px");
+    root.setProperty("--sh-pad", shPad + "px");
     resize();
   }
 }
