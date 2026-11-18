@@ -98,7 +98,7 @@
         <h1>전극은<br>반죽에서<br>시작한다</h1>
         <p class="lede">활물질 가루에 도전재와 바인더를 섞고 용매를 부으면, 검은 반죽이 됩니다. 이 반죽을 얇게 바르고, 말리고, 눌러서 전극을 만듭니다.</p>
         <p class="body">네 단계 중 품질이 갈리는 곳은 세 번째, <b>건조</b>입니다. 그 이야기를 하기 전에, 먼저 반죽을 제대로 섞어야 합니다.</p>
-        <p class="hint">오른쪽 반죽을 마우스로 휘저어 보세요 — 섞이지 않은 덩어리가 남습니다.</p>
+        <p class="hint">시뮬레이션 위에서 마우스를 끌어 휘저어 보세요 — 섞이지 않은 덩어리가 남습니다.</p>
         <div class="chips">
           <span>덩어리 풀림 <b id="m-uni">—</b></span>
           <span>최대 전단 <b id="m-shear">—</b></span>
@@ -134,12 +134,12 @@
         <span class="eyebrow">03 — 건조 · 품질이 갈리는 곳</span>
         <h2>품질은<br>여기서 갈린다</h2>
         <p class="body">젖은 전극에서 용매가 빠져나갑니다. 문제는 속도입니다. 겉면만 빨리 마르면, 남은 용매가 안쪽에서 빠져나오지 못하고 바인더를 표면으로 끌고 올라갑니다. 그러면 표면은 단단하고 속은 약한 전극이 됩니다.</p>
-        <p class="body">그래서 온도를 올리는 대신 압력을 낮춥니다. 낮은 압력에서는 용매가 낮은 온도에서, 안쪽부터 고르게 빠져나갑니다.</p>
+        <p class="body">그래서 온도를 올리는 대신 압력을 낮춥니다. 진공에서는 같은 속도를 훨씬 낮은 온도로 낼 수 있고, 이동을 만드는 것은 결국 표면 온도입니다.</p>
         <div class="ctl">
           <label>드라이어 온도 <b id="d-tv">—</b><input id="d-t" type="range" min="60" max="150" step="5" value="120"></label>
           <label>챔버 압력 <b id="d-pv">—</b><input id="d-p" type="range" min="5" max="101" step="1" value="101"></label>
         </div>
-        <p class="hint">압력을 101 kPa(대기압)에서 10 kPa 아래로 내려보세요 — 같은 시간에 남는 용매와 바인더 분포가 달라집니다.</p>
+        <p class="hint">압력을 101 kPa에서 10 kPa 아래로 내려보세요 — 같은 시간에 남는 용매가 늘고, 표면에 몰리는 바인더가 줄어듭니다.</p>
         <div class="chips">
           <span>잔류 용매 <b id="d-res">—</b></span>
           <span>건조 진행 <b id="d-prog">—</b></span>
@@ -208,7 +208,7 @@ function layout() {
   cv.width = Math.round(VW * dpr); cv.height = Math.round(VH * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (VW <= 900) {
-    world = { x: VW * 0.06, y: VH * 0.60, w: VW * 0.88, h: Math.min(VH * 0.30, 300) };
+    world = { x: VW * 0.05, y: VH * 0.575, w: VW * 0.90, h: Math.min(VH * 0.345, 330) };
   } else {
     world = { x: VW * 0.50, y: VH * 0.10, w: VW * 0.44, h: VH * 0.80 };
   }
@@ -533,16 +533,17 @@ const mixing = (() => {
       hair(0.14, ox - 5, yy, ox, yy);
     }
     scaleBar(ox + 8, oy + side + 18, side * 0.25, "500 mm");
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
     ctx.fillText("탱크 Ø 2 m · 상면", ox, oy - 8);
 
     // 보조: 덩어리 풀림 추이
+    if (!P.aux) return;
     const pts = hist.length > 1
       ? hist.map((h) => [(h[0] - hist[0][0]) / Math.max(0.001, hist[hist.length - 1][0] - hist[0][0]), h[1]])
       : [[0, uni], [1, uni]];
     plotPanel(P.aux, {
       title: "덩어리 풀림 추이",
-      xLabel: "t (s)", yLabel: "%",
+      xLabel: "t (s)", yLabel: "%", yMax: 1, xMax: 1,
       series: [{ points: pts, color: CU + "0.95)", width: 1.4 },
                { points: [[0, 0], [1, 0]], color: INK + "0.12)", width: 1 }],
       legend: [{ name: "1 − 불균일/초기", color: CU + "0.95)" }],
@@ -661,12 +662,12 @@ const coating = (() => {
     const pxPerUm = (P.main.h * 0.46) / span;
 
     // 집전체(구리박) 단면 + 해칭
-    ctx.fillStyle = CU + "0.9)";
-    ctx.fillRect(x0, base, W2, 7);
+    ctx.fillStyle = CU + "0.55)";
+    ctx.fillRect(x0, base, W2, 9);
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, base, W2, 7); ctx.clip();
-    ctx.strokeStyle = CU + "0.45)"; ctx.lineWidth = 1;
-    for (let q = -10; q < W2; q += 6) { ctx.beginPath(); ctx.moveTo(x0 + q, base + 7); ctx.lineTo(x0 + q + 7, base); ctx.stroke(); }
+    ctx.strokeStyle = CU + "0.85)"; ctx.lineWidth = 1;
+    for (let q = -10; q < W2; q += 5) { ctx.beginPath(); ctx.moveTo(x0 + q, base + 9); ctx.lineTo(x0 + q + 9, base - 1); ctx.stroke(); }
     ctx.restore();
 
     // 유막 단면 (두께 프로파일)
@@ -690,32 +691,43 @@ const coating = (() => {
     ctx.fill();
     ctx.strokeStyle = INK + "0.9)"; ctx.lineWidth = 1; ctx.stroke();
 
-    // 블레이드 단면 (입체)
-    const bx = x0 + (BX / N) * W2, by = base - (gap / M) * (P.main.h * 0.42);
+    // 슬롯다이 헤드: 본체 + 립 + 노즐 슬롯 + 메니스커스
+    const bx = x0 + (BX / N) * W2, by = base - (gap / M) * (P.main.h * 0.46);
+    const dieW = Math.min(168, P.main.w * 0.30), dieH = Math.min(104, P.main.h * 0.20);
+    const dieX = bx - dieW * 0.62, dieY = by - dieH - 34;
     ctx.beginPath();
-    ctx.moveTo(x0 - 12, P.main.y + 46);
-    ctx.lineTo(bx, P.main.y + 46);
-    ctx.lineTo(bx, by);
-    ctx.lineTo(bx - 13, by + 4);
-    ctx.lineTo(bx - 13, P.main.y + 46);
-    ctx.closePath();
+    ctx.roundRect(dieX, dieY, dieW, dieH, 3);
+    const gd = ctx.createLinearGradient(dieX, 0, dieX + dieW, 0);
+    gd.addColorStop(0, "rgba(198,196,190,1)");
+    gd.addColorStop(0.42, "rgba(242,240,235,1)");
+    gd.addColorStop(1, "rgba(160,158,152,1)");
+    ctx.fillStyle = gd; ctx.fill();
+    ctx.strokeStyle = INK + "0.45)"; ctx.lineWidth = 1; ctx.stroke();
+    // 노즐 슬롯 (립 두 개)
+    ctx.fillStyle = "rgba(22,22,24,0.96)";
+    const lipW = 9, lipGap = 12, lipH = Math.max(14, by - (dieY + dieH) + 6);
+    ctx.fillRect(Math.round(bx - lipGap / 2 - lipW), Math.round(dieY + dieH), lipW, lipH);
+    ctx.fillRect(Math.round(bx + lipGap / 2), Math.round(dieY + dieH), lipW, lipH);
+    // 메니스커스 (립 사이 → 필름)
+    ctx.strokeStyle = CU + "0.95)"; ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.moveTo(bx - 34, P.main.y + 30);
-    ctx.lineTo(bx - 4, P.main.y + 30);
-    ctx.lineTo(bx - 4, P.main.y + 44);
-    ctx.lineTo(bx - 34, P.main.y + 44);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(214,212,206,1)"; ctx.fill();
-    ctx.strokeStyle = INK + "0.3)"; ctx.lineWidth = 1; ctx.stroke();
-    const gb = ctx.createLinearGradient(bx - 13, 0, bx, 0);
-    gb.addColorStop(0, "rgba(196,194,188,1)");
-    gb.addColorStop(0.55, "rgba(232,230,225,1)");
-    gb.addColorStop(1, "rgba(146,144,138,1)");
-    ctx.fillStyle = gb; ctx.fill();
-    ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
-    ctx.fillText("다이", bx - 34, P.main.y + 40);
-
+    ctx.moveTo(bx - 6, by - 12);
+    ctx.quadraticCurveTo(bx, base - 6, bx - 20, base - 1.5);
+    ctx.stroke();
+    // 지시선 + 라벨 (본체 / 노즐 슬롯)
+    ctx.strokeStyle = MU + "1)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(dieX - 4, dieY + dieH * 0.5); ctx.lineTo(dieX - 22, dieY + dieH * 0.5);
+    ctx.stroke();
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
+    ctx.fillText("슬롯다이 헤드", Math.max(P.main.x + 24, dieX - 22 - 80), dieY + dieH * 0.5 + 3);
+    const slotY = dieY + dieH + lipH * 0.55;
+    ctx.strokeStyle = CU + "0.95)";
+    ctx.beginPath();
+    ctx.moveTo(bx + lipGap / 2 + lipW + 2, slotY); ctx.lineTo(bx + lipGap / 2 + lipW + 26, slotY);
+    ctx.stroke();
+    ctx.fillStyle = CU + "1)"; ctx.font = "600 10px " + MONO;
+    ctx.fillText("노즐 " + (lipGap * 2.2).toFixed(0) + " µm", bx + lipGap / 2 + lipW + 29, slotY + 3);
     // 틈새 치수선
     const dimX = bx + 26;
     ctx.strokeStyle = CU + "0.9)"; ctx.lineWidth = 1;
@@ -742,20 +754,22 @@ const coating = (() => {
     for (let g2 = 0; g2 <= span + 0.001; g2 += step2) {
       const yy = base - g2 * pxPerUm;
       hair(0.35, x1 + 14, yy, x1 + 19, yy);
-      ctx.fillStyle = MU + "1)"; ctx.font = "500 9px " + MONO;
+      ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
       ctx.fillText(g2.toFixed(step2 < 1 ? 1 : 0), x1 + 22, yy + 3);
     }
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
     ctx.fillText("µm", x1 + 22, base - span * pxPerUm - 9);
 
     scaleBar(x0, base + 34, Math.min(W2 * 0.34, 150), "10 mm");
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
     ctx.fillText("Cu foil 8 µm · 단면 방향 과장 ×" + Math.round((pxPerUm * 7) / (W2 / 10)), x0, base + 54);
 
     // 보조: 두께 프로파일
+    if (!P.aux) return;
     plotPanel(P.aux, {
+      area: INK + "0.13)",
       title: "웨트 두께 프로파일 h(x)",
-      xLabel: "웹 진행 방향", yLabel: "µm",
+      xLabel: "웹 진행 방향", yLabel: "µm", yMax: span, xMax: 1,
       series: [{ points: prof.map(([u, v]) => [u, Math.min(1, v / span)]), color: INK + "0.9)", width: 1.4 },
                { points: [[0, Math.min(1, (mean * UM) / span)], [1, Math.min(1, (mean * UM) / span)]], color: CU + "0.5)", width: 1 }],
       legend: [{ name: "측정", color: INK + "0.9)" }, { name: "목표", color: CU + "0.5)" }],
@@ -806,7 +820,8 @@ const drying = (() => {
     dt = clamp(dt, 0.004, 0.04);
     // 증발: 표면에서 빠져나가는 플럭스 (온도 ↑, 압력 ↓ 이면 커진다)
     const rate = (0.10 + (temp - 60) / 90 * 0.85) * (1 + (1 - press / 101) * 0.25);
-    const migK = 0.22 + (temp - 60) / 90;            // 표면이 뜨거울수록 바인더가 위로 몰린다
+    // 표면 마름이 심할수록(고온·고압) 바인더가 위로 몰린다 — 진공에서는 같은 온도라도 덜 몰린다
+    const migK = 0.52 * (0.10 + (temp - 60) / 90 * 1.9) * (0.15 + 0.85 * (press / 101));
     const flux = rate * 0.95 * dt;
     const D = 0.16;                      // 확산 계수 (안쪽 → 표면)
     c0.set(c); b0.set(b);
@@ -829,7 +844,7 @@ const drying = (() => {
     for (let j = M - 2; j >= 1; j--) {
       for (let i = 0; i < N; i++) {
         const kd = idx(i, j), ku = idx(i, j + 1);
-        const flow = Math.max(0, (c0[kd] - c0[ku])) * 0.85 * (0.10 + (temp - 60) / 90 * 1.9) * dt;
+        const flow = Math.max(0, (c0[kd] - c0[ku])) * 0.85 * migK * dt;
         if (flow > 1e-6) {
           const db = Math.min(b0[kd] * 0.06, flow * (b0[kd] + 0.5));
           b[kd] -= db; b[ku] += db;
@@ -857,7 +872,7 @@ const drying = (() => {
     let sb = 0;
     for (let i = 0; i < N; i++) { sb += b[idx(i, M - 1)] + b[idx(i, M - 2)]; }
     mig = sb / (2 * N);                       // 표면 바인더 농도(초기 1.0 기준 배수)
-    for (let k = 0; k < b.length; k++) b[k] = clamp(b[k], 0, 4);
+    for (let k = 0; k < b.length; k++) b[k] = clamp(b[k], 0, 6);
   }
   function render() {
     const P = layoutPanels(0.54);
@@ -904,10 +919,10 @@ const drying = (() => {
     for (let g3 = 0; g3 <= 100; g3 += 25) {
       const yy = ry0 + (g3 / depthUm) * rh;
       hair(0.35, rx0 + rw + 12, yy, rx0 + rw + 17, yy);
-      ctx.fillStyle = MU + "1)"; ctx.font = "500 9px " + MONO;
+      ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
       ctx.fillText(String(g3), rx0 + rw + 20, yy + 3);
     }
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
     ctx.fillText("µm", rx0 + rw + 20, ry0 - 8);
     scaleBar(rx0, ry0 + rh + 52, rw * 0.3, "5 cm (web 폭)");
 
@@ -920,9 +935,11 @@ const drying = (() => {
       cProf.push([u, Math.min(1, cc / N / 1.15)]);
       bProf.push([u, Math.min(1, (bb / N) / 3.2)]);
     }
+    if (!P.aux) return;
     plotPanel(P.aux, {
+      area: CU + "0.10)",
       title: "깊이별 분포",
-      xLabel: "표면 → 집전체", yLabel: "상대 농도",
+      xLabel: "표면 → 집전체", yLabel: "상대 농도", yMax: 1, xMax: 1,
       series: [{ points: cProf, color: INK + "0.9)", width: 1.4 },
                { points: bProf, color: CU + "0.95)", width: 1.4 }],
       legend: [{ name: "용매", color: INK + "0.9)" }, { name: "바인더", color: CU + "0.95)" }],
@@ -1080,12 +1097,12 @@ const calendering = (() => {
     ctx.stroke();
     ctx.fillStyle = CU + "1)"; ctx.font = "600 10px " + MONO;
     ctx.fillText(gapUm.toFixed(0) + " µm", X(spanX) + 20, nipY + 3);
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
     ctx.fillText("롤", X(spanX) + 20, Y(topY) - 8);
     ctx.fillText("롤", X(spanX) + 20, Y(floorY) + 14);
 
     scaleBar(ox, oy + (T0 + 8) * sc, spanX * sc * 0.22, "20 mm");
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 9.5px " + MONO;
+    ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
     ctx.fillText("입자 " + parts.length + "개 · 압축 " + (red * 100).toFixed(0) + "%", ox, oy + (T0 + 8) * sc + 30);
 
     // 보조: 층 두께 방향 압축률 분포
@@ -1095,9 +1112,10 @@ const calendering = (() => {
       for (let c = 0; c < COLS; c++) ac += parts[r * COLS + c].crush;
       rows.push([r / (ROWS - 1), Math.min(1, (ac / COLS) * 4)]);
     }
+    if (!P.aux) return;
     plotPanel(P.aux, {
       title: "층 두께 방향 압축률",
-      xLabel: "상부 → 하부", yLabel: "상대 압축",
+      xLabel: "상부 → 하부", yLabel: "상대 압축", yMax: 1, xMax: 1,
       series: [{ points: rows, color: CU + "0.95)", width: 1.5 },
                { points: [[0, Math.min(1, red)], [1, Math.min(1, red)]], color: INK + "0.25)", width: 1 }],
       legend: [{ name: "입자", color: CU + "0.95)" }, { name: "평균", color: INK + "0.25)" }],
@@ -1190,7 +1208,7 @@ function plotPanel(r, opt) {
   ctx.save();
   ctx.strokeStyle = INK + "0.35)";
   ctx.lineWidth = 1;
-  const ax = r.x + 30, ay = r.y + 20, aw = r.w - 44, ah = r.h - 56;
+  const ax = r.x + 34, ay = r.y + 20, aw = r.w - 50, ah = r.h - 62;
   ctx.beginPath();
   ctx.moveTo(Math.round(ax) + 0.5, Math.round(ay) + 0.5);
   ctx.lineTo(Math.round(ax) + 0.5, Math.round(ay + ah) + 0.5);
@@ -1199,6 +1217,39 @@ function plotPanel(r, opt) {
   ctx.fillStyle = INK + "0.9)";
   ctx.font = "600 10px " + MONO;
   ctx.fillText(opt.title || "", r.x, r.y + 8);
+  // 눈금 + 수치 (opt.yMax / opt.xMax)
+  ctx.strokeStyle = INK + "0.22)"; ctx.lineWidth = 1;
+  ctx.font = "500 9.5px " + MONO;
+  ctx.fillStyle = MU + "1)";
+  for (let q = 0; q <= 4; q++) {
+    const yy = ay + ah - (q / 4) * ah;
+    ctx.beginPath(); ctx.moveTo(ax - 4, Math.round(yy) + 0.5); ctx.lineTo(ax, Math.round(yy) + 0.5); ctx.stroke();
+    if (opt.yMax != null) {
+      const v = (opt.yMax * q / 4);
+      ctx.textAlign = "right";
+      ctx.fillText(v >= 10 ? v.toFixed(0) : v.toFixed(1), ax - 6, yy + 3);
+      ctx.textAlign = "start";
+    }
+    const xx = ax + (q / 4) * aw;
+    ctx.beginPath(); ctx.moveTo(Math.round(xx) + 0.5, ay + ah); ctx.lineTo(Math.round(xx) + 0.5, ay + ah + 4); ctx.stroke();
+    if (opt.xMax != null) {
+      const v = (opt.xMax * q / 4);
+      ctx.textAlign = "center";
+      ctx.fillText(v >= 10 ? v.toFixed(0) : v.toFixed(1), xx, ay + ah + 14);
+      ctx.textAlign = "start";
+    }
+  }
+  // 곡선 아래 채우기 (첫 시리즈)
+  if (opt.area && opt.series.length) {
+    const pts = opt.series[0].points;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay + ah);
+    for (const [u, v] of pts) ctx.lineTo(ax + u * aw, ay + ah - v * ah);
+    ctx.lineTo(ax + aw, ay + ah);
+    ctx.closePath();
+    ctx.fillStyle = opt.area;
+    ctx.fill();
+  }
   // 곡선
   for (const s of opt.series) {
     ctx.strokeStyle = s.color || INK + "0.9)";
@@ -1213,20 +1264,24 @@ function plotPanel(r, opt) {
   }
   // 축 라벨
   ctx.fillStyle = MU + "1)";
-  ctx.font = "500 9.5px " + MONO;
-  ctx.fillText(opt.xLabel || "", ax + aw - ctx.measureText(opt.xLabel || "").width, ay + ah + 13);
+  ctx.font = "500 10.5px " + MONO;
+  ctx.fillText(opt.xLabel || "", ax + aw - ctx.measureText(opt.xLabel || "").width, ay + ah + (opt.xMax != null ? 26 : 13));
   ctx.save();
   ctx.translate(ax - 8, ay + ah - ctx.measureText(opt.yLabel || "").width);
   ctx.rotate(-Math.PI / 2);
   ctx.fillText(opt.yLabel || "", 0, 0);
   ctx.restore();
   if (opt.legend) {
-    let lx = ax + 4;
+    ctx.font = "500 10px " + MONO;
+    let lw = 0;
+    for (const s of opt.legend) lw += 14 + ctx.measureText(s.name).width;
+    let lx = r.x + r.w - lw;
+    const ly = r.y + 13;
     for (const s of opt.legend) {
       ctx.fillStyle = s.color;
-      ctx.fillRect(lx, ay + ah + 20, 8, 2);
+      ctx.fillRect(lx, ly - 3, 8, 2);
       ctx.fillStyle = MU + "1)";
-      ctx.fillText(s.name, lx + 12, ay + ah + 23);
+      ctx.fillText(s.name, lx + 12, ly);
       lx += 14 + ctx.measureText(s.name).width;
     }
   }
@@ -1235,6 +1290,7 @@ function plotPanel(r, opt) {
 
 // 장면 배치: 주 패널(좌) + 보조 패널(우)
 function layoutPanels(mainRatio) {
+  if (VW <= 900) return { main: { x: world.x, y: world.y, w: world.w, h: world.h }, aux: null };
   const gap = Math.max(18, world.w * 0.035);
   const mw = world.w * (mainRatio || 0.60);
   return {
@@ -1316,6 +1372,7 @@ addEventListener("pointerup", () => { down = false; });
 let last = 0, acc = 0;
 const FIXED = 1 / 60;
 function frame(now) {
+  if (frozen) { requestAnimationFrame(frame); return; }
   const real = last ? clamp((now - last) / 1000, 0.001, 0.25) : FIXED;
   last = now;
   ctx.clearRect(0, 0, VW, VH);
@@ -1336,7 +1393,38 @@ function frame(now) {
   if (hudT > 0.12) { hudT = 0; paintHud(); pickScene(); }
   requestAnimationFrame(frame);
 }
+let frozen = false;
 window.__bat = {
+  freeze: (v) => { frozen = v === undefined ? true : !!v; return frozen; },
+  frame: (dt) => { if (!active) return null; active.step(dt || FIXED); active.render(); paintHud(); return active.probe ? active.probe() : null; },
+  textRects: (name) => {
+    const out = [], orig = ctx.fillText;
+    ctx.fillText = function (t, x, y, ...r) {
+      const fm = ctx.font.match(/(\d+(?:\.\d+)?)px/);
+      const m = ctx.getTransform();
+      const rot = Math.abs(m.b) > 0.3 || Math.abs(m.c) > 0.3;
+      out.push({
+        t: String(t), rot,
+        x: rot ? 0 : m.a * x + m.c * y + m.e,
+        y: rot ? -1e6 : m.b * x + m.d * y + m.f,
+        w: ctx.measureText(t).width * (rot ? 0 : m.a),
+        fs: (fm ? +fm[1] : 10) * (rot ? 0 : m.a),
+      });
+      return orig.call(this, t, x, y, ...r);
+    };
+    const sc = name ? SCENES[name] : active;
+    try { if (sc) sc.render(); } finally { ctx.fillText = orig; }
+    const box = (a) => (a.rot ? [0, -1e6, 0, -1e6] : [a.x, a.y - a.fs * 0.85, a.x + a.w, a.y + a.fs * 0.28]);
+    const hits = [];
+    for (let i = 0; i < out.length; i++)
+      for (let j = i + 1; j < out.length; j++) {
+        const A = box(out[i]), B = box(out[j]);
+        const ox = Math.min(A[2], B[2]) - Math.max(A[0], B[0]);
+        const oy = Math.min(A[3], B[3]) - Math.max(A[1], B[1]);
+        if (ox > 1.5 && oy > 1.5) hits.push(`"${out[i].t}"@${Math.round(out[i].x)},${Math.round(out[i].y)} ⋈ "${out[j].t}"@${Math.round(out[j].x)},${Math.round(out[j].y)}`);
+      }
+    return { n: out.length, hits };
+  },
   scene: () => activeName,
   setScene,
   probe: () => (active && active.probe ? active.probe() : null),
