@@ -25,7 +25,7 @@
     --line:#e4e4df; --line-soft:#eeece8;
     --accent:#d93a1c;
     --paper:#ffffff; --wash:#f7f7f4;
-    --sh:46vh; --pad:clamp(20px,4.6vw,52px); --col:1120px;
+    --sh:46vh; --sh-pad:30vh; --pad:clamp(20px,4.6vw,52px); --col:1120px;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     interpolate-size:allow-keywords;
   }
@@ -38,7 +38,7 @@
   body{margin:0;background:var(--paper);color:var(--ink);
     font-family:"PretendardSubset","Pretendard",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
     font-weight:420;font-size:17px;line-height:1.75;letter-spacing:-0.011em;
-    padding-bottom:var(--sh);overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+    padding-bottom:var(--sh-pad);overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
   ::selection{background:var(--ink);color:var(--paper)}
   h1,h2,h3{margin:0;font-weight:660;letter-spacing:-0.035em;line-height:1.06;text-wrap:balance}
   p{margin:0;text-wrap:pretty}
@@ -80,9 +80,12 @@
 
   /* ── 무대 ─────────────────────────────────────────── */
   #stage{position:fixed;left:0;right:0;bottom:0;height:var(--sh);background:var(--paper);border-top:1px solid var(--line);z-index:5}
-  #stage canvas{display:block;width:100%;height:100%;touch-action:none}
+  #stage canvas{display:block;width:100%;height:100%;touch-action:pan-y}
   #stage canvas.armed{cursor:grab}
   #stage canvas.grabbing{cursor:grabbing}
+  .coach{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;gap:5px;font-family:var(--mono);font-size:.75rem;letter-spacing:.01em;color:var(--muted-strong);pointer-events:none;white-space:nowrap;transition:opacity .45s ease;z-index:3}
+  .coach i{display:block;width:1px;height:18px;background:linear-gradient(to bottom,var(--line),var(--ink))}
+  .coach.gone{opacity:0}
   .readout{position:absolute;left:var(--pad);top:11px;right:var(--pad);display:flex;flex-wrap:wrap;gap:4px 16px;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:.75rem;letter-spacing:.04em;color:var(--muted-strong);pointer-events:none}
   .readout b{color:var(--ink);font-weight:600}
   .readout .sep{color:var(--line);margin:0 5px}
@@ -165,6 +168,7 @@
     <span id="r-mode">대기 · 첫 번째 도미노를 밀어보세요</span>
   </div>
   <canvas id="cv" aria-hidden="true"></canvas>
+  <div class="coach" id="coach" hidden><span>누르면 넘어집니다 · 끌면 기울입니다</span><i></i></div>
   <div class="rail" id="rail" aria-hidden="true"></div>
 </div>
 
@@ -184,7 +188,7 @@
       <button class="btn" id="push">밀어보기</button>
       <button class="btn ghost" id="reset">다시 세우기</button>
       <button class="btn tiny" id="sound" aria-pressed="false">소리 켜기</button>
-      <span class="hint">도미노를 잡아 기울여도 됩니다 · 스크롤하면 시야가 따라갑니다</span>
+      <span class="hint" id="hint">누르면 넘어지고, 끌면 기울입니다 · 스크롤하면 시야가 따라갑니다</span>
     </div>
   </section>
 
@@ -611,13 +615,15 @@ function maxAngle() {
   for (const d of dominoes) m = Math.max(m, Math.abs(d.a));
   return m * 180 / Math.PI;
 }
+function impulseAt(b, px, py, force) {
+  b.sleep = false; b.still = 0;
+  applyImp(b, { px, py }, force, 0, 1);
+  started = true;
+}
 function push(idx = 0, force = 120) {
   const d = dominoes[idx];
   if (!d || Math.abs(d.a) > 0.95) return false;
-  const c = { px: d.x + Math.sin(d.a) * CFG.HH * 0.85, py: d.y - Math.cos(d.a) * CFG.HH * 0.85 };
-  d.sleep = false; d.still = 0;
-  applyImp(d, c, force, 0, 1);
-  started = true;
+  impulseAt(d, d.x + Math.sin(d.a) * CFG.HH * 0.85, d.y - Math.cos(d.a) * CFG.HH * 0.85, force);
   return true;
 }
 let grabIdx = -1;
@@ -641,6 +647,7 @@ for (let i = 0; i < CFG.N; i++) { const el = document.createElement("i"); rail.a
 
 let W = 1, H = 1, dpr = 1, scale = 1, groundScreenY = 0, viewW = 520, cam = 0, camAuto = 0;
 let grabbing = false, grabPrev = 0, grabPrevT = 0, grabVel = 0;
+let hoverIdx = -1, downX = 0, downY = 0, downT = 0;
 let _accent = null;
 const ACCENT = () => (_accent ||= getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#d93a1c");
 const camMax = () => Math.max(0, CHAIN_MAX - viewW);
@@ -653,9 +660,32 @@ function resize() {
   cv.width = Math.round(W * dpr);
   cv.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  viewW = window.innerWidth < 720 ? 300 : 520;
-  scale = Math.min(W / viewW, (H * 0.74) / (CFG.HH * 2), 3.6);
+  viewW = window.innerWidth < 720 ? 300 : (W > 1700 ? 620 : 520);
+  scale = Math.min(W / viewW, (H * 0.76) / (CFG.HH * 2), 3.8);
   groundScreenY = Math.round(H * 0.86);
+}
+
+// 모니터 크기·비율에 따라 무대 높이를 정하고, 스크롤하면 읽기 높이까지 줄인다
+let shNow = 0, shPad = 0;
+const clampN = (v, a, b) => (v < a ? a : (v > b ? b : v));
+function stageHeight() {
+  const vh = window.innerHeight, vw = window.innerWidth;
+  const wide = vw / vh;
+  const shortK = clampN(vh / 760, 0.55, 1);            // 낮은 화면일수록 더 과감히 줄인다
+  const k = (wide > 2.1 ? 0.86 : 1) * shortK;
+  const mobile = vw < 720;
+  const short = vh < 560;
+  const hero = clampN(vh * (mobile ? 0.44 : 0.42) * k, short ? 132 : (mobile ? 200 : 210), 430);
+  const reading = clampN(vh * (mobile ? 0.31 : 0.29) * k, short ? 112 : 165, 330);
+  const p = clampN(window.scrollY / Math.max(1, vh * 0.7), 0, 1);
+  const want = hero + (reading - hero) * p;
+  if (Math.abs(want - shNow) > 1 || Math.abs(reading - shPad) > 1) {
+    shNow = want; shPad = reading;
+    const root = document.documentElement.style;
+    root.setProperty("--sh", shNow.toFixed(1) + "px");
+    root.setProperty("--sh-pad", shPad.toFixed(1) + "px");
+    resize();
+  }
 }
 
 let shadowGrad = null, bodyGrad = null, bodyGradScale = 0;
@@ -730,8 +760,17 @@ function render() {
       ctx.fillStyle = (falling || last) ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.16)";
       ctx.fill();
     }
+    // 커서가 올라간 도미노 표시
+    if (i === hoverIdx) {
+      ctx.beginPath();
+      ctx.roundRect(-w / 2 - 2.5, -h / 2 - 2.5, w + 5, h + 5, r + 2.5);
+      ctx.lineWidth = Math.max(1, 1.1 * scale);
+      ctx.strokeStyle = fallen ? "rgba(16,16,16,0.16)" : "rgba(16,16,16,0.42)";
+      ctx.stroke();
+    }
     ctx.restore();
   }
+  placeCoach();
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -820,11 +859,14 @@ function hitTest(p) {
 }
 
 cv.addEventListener("pointerdown", (ev) => {
-  const i = hitTest(toWorld(ev));
+  const p = toWorld(ev);
+  const i = hitTest(p);
   if (i < 0) return;
   ev.preventDefault();
+  hideCoach();
   try { cv.setPointerCapture(ev.pointerId); } catch (_) {}
   grabbing = true; grabIdx = i;
+  downX = ev.clientX; downY = ev.clientY; downT = performance.now();
   cv.classList.add("grabbing"); cv.classList.remove("armed");
   const b = dominoes[i];
   grabPrev = b.a; grabPrevT = performance.now(); grabVel = 0;
@@ -834,7 +876,8 @@ cv.addEventListener("pointerdown", (ev) => {
 
 cv.addEventListener("pointermove", (ev) => {
   if (!grabbing) {
-    cv.classList.toggle("armed", hitTest(toWorld(ev)) >= 0);
+    const idx = hitTest(toWorld(ev));
+    if (idx !== hoverIdx) { hoverIdx = idx; cv.classList.toggle("armed", idx >= 0); render(); }
     return;
   }
   const b = dominoes[grabIdx];
@@ -850,17 +893,50 @@ cv.addEventListener("pointermove", (ev) => {
   grabPrev = a; grabPrevT = now;
 }, { passive: true });
 
-function endGrab() {
+function endGrab(ev) {
   if (!grabbing) return;
   const b = dominoes[grabIdx];
+  const tapped = !!(ev && Math.hypot(ev.clientX - downX, ev.clientY - downY) < 9 && (performance.now() - downT) < 400);
   b.im = 1 / MASS; b.ii = INV_I;
-  b.w = Math.max(-5, Math.min(5, grabVel));   // 손을 뗄 때의 각속도 (평활·제한)
+  if (tapped) {
+    // 누르기 = 밀기. 버튼과 같은 세기로, 누른 도미노에서 연쇄가 시작된다.
+    b.w = 0;
+    impulseAt(b, b.x + Math.sin(b.a) * CFG.HH * 0.85, b.y - Math.cos(b.a) * CFG.HH * 0.85, 120);
+  } else {
+    b.w = Math.max(-5, Math.min(5, grabVel));
+  }
   b.still = 0;
   grabbing = false; grabIdx = -1;
   cv.classList.remove("grabbing");
 }
-cv.addEventListener("pointerup", endGrab);
-cv.addEventListener("pointercancel", endGrab);
+cv.addEventListener("pointerup", (ev) => endGrab(ev));
+cv.addEventListener("pointercancel", () => endGrab(null));
+
+/* 손끝 안내 — 첫 상호작용 전까지 서 있는 첫 도미노 위에 붙는다 */
+const coach = document.getElementById("coach");
+let coachShown = false, interacted = false;
+function placeCoach() {
+  if (!coachShown || !coach) return;
+  const b = dominoes.find((d) => Math.abs(d.a) < 0.05);
+  if (!b) return;
+  const x = clampN((b.x - cam) * scale, 96, W - 96);
+  const y = Math.max(groundScreenY + (b.y - CFG.GROUND_Y - CFG.HH) * scale - 12, 50);   // 도미노 꼭대기 위, 무대 밖으로는 나가지 않게
+  coach.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px) translate(-50%,-100%)";
+}
+function showCoach() {
+  if (interacted || coachShown || !coach) return;
+  coachShown = true;
+  coach.hidden = false;
+  requestAnimationFrame(() => coach.classList.remove("gone"));
+  placeCoach();
+}
+function hideCoach() {
+  interacted = true;
+  if (!coachShown || !coach) return;
+  coach.classList.add("gone");
+  coachShown = false;
+  setTimeout(() => { coach.hidden = true; }, 500);
+}
 
 /* ══════════════════════════════════════════════════════════
    11. 카메라 · 스크롤 · 리빌
@@ -876,11 +952,12 @@ function readScroll() {
   scrollCam = Math.max(0, Math.min(1, window.scrollY / max)) * camMax();
   if (!autoPushed && !reduce && window.scrollY > window.innerHeight * 0.3) {
     autoPushed = true;
+    hideCoach();
     if (!started && toppledCount() === 0) push(0);
   }
 }
 window.addEventListener("scroll", readScroll, { passive: true });
-window.addEventListener("resize", () => { resize(); readScroll(); render(); paint(); });
+window.addEventListener("resize", () => { stageHeight(); resize(); readScroll(); render(); paint(); });
 
 if (!sda || reduce) {
   const io = new IntersectionObserver((es) => {
@@ -894,6 +971,7 @@ if (!sda || reduce) {
    ══════════════════════════════════════════════════════════ */
 let frameNo = 0;
 function frame() {
+  stageHeight();
   for (let s = 0; s < CFG.SUB; s++) if (!paused) step(CFG.DT);
 
   if (pendingSounds.length && soundOn) {
@@ -918,12 +996,13 @@ function frame() {
    13. 컨트롤 · 검증 훅
    ══════════════════════════════════════════════════════════ */
 function doPush() {
+  hideCoach();
   if (toppledCount() >= CFG.N) resetWorld();
   if (!push(0)) { resetWorld(); push(0); }
   autoPushed = true;
   paint();
 }
-function doReset() { resetWorld(); autoPushed = false; }
+function doReset() { hideCoach(); resetWorld(); autoPushed = false; }
 $("push").addEventListener("click", doPush);
 $("push2").addEventListener("click", doPush);
 $("reset").addEventListener("click", doReset);
@@ -958,14 +1037,17 @@ window.__domino = {
     xs: dominoes.map((d) => +d.x.toFixed(2)), ys: dominoes.map((d) => +d.y.toFixed(2)),
     nan: dominoes.some((d) => ![d.x, d.y, d.a, d.vx, d.vy, d.w].every(Number.isFinite)),
     sleeping: dominoes.filter((d) => d.sleep).length,
-    sda: !!sda, hiddenRv: [...document.querySelectorAll(".rv")].filter((e) => !e.classList.contains("on")).length,
+    sda: !!sda, hover: hoverIdx, coach: !!coachShown,
+    sh: Math.round(shNow), shPad: Math.round(shPad), hiddenRv: [...document.querySelectorAll(".rv")].filter((e) => !e.classList.contains("on")).length,
     view: { W, H, dpr, scale: +scale.toFixed(3), groundScreenY, viewW, camMax: +camMax().toFixed(1) },
   }),
   config: CFG,
 };
 
+stageHeight();
 resize();
 readScroll();
+if (!reduce) setTimeout(showCoach, 1500);
 for (let i = 0; i < 120; i++) step(CFG.DT);   // 초기 안정화
 cam = 0; camAuto = 0;
 render(); paint();
