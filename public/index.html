@@ -691,6 +691,22 @@ const coating = (() => {
     ctx.fill();
     ctx.strokeStyle = INK + "0.9)"; ctx.lineWidth = 1; ctx.stroke();
 
+    // 필름/집전체 계면 + 웨트 필름 지시선 (필름이 충분히 두꺼울 때만)
+    ctx.strokeStyle = CU + "0.95)"; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(x0) + 0.5, Math.round(base) + 0.5);
+    ctx.lineTo(Math.round(x0 + W2) + 0.5, Math.round(base) + 0.5);
+    ctx.stroke();
+    if (mean * UM > 6) {
+      const lx = x0 + W2 * 0.68, ly = base - Math.max(6, mean * UM * pxPerUm * 0.5);
+      ctx.strokeStyle = MU + "1)"; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly); ctx.lineTo(lx + 20, ly + 20);
+      ctx.stroke();
+      ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
+      ctx.fillText("웨트 필름", lx + 23, ly + 23);
+    }
+
     // 슬롯다이 헤드: 본체 + 립 + 노즐 슬롯 + 메니스커스
     const bx = x0 + (BX / N) * W2, by = base - (gap / M) * (P.main.h * 0.46);
     const dieW = Math.min(168, P.main.w * 0.30), dieH = Math.min(104, P.main.h * 0.20);
