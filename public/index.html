@@ -790,7 +790,8 @@ const coating = (() => {
 
     scaleBar(x0, base + 34, Math.min(W2 * 0.34, 150), "10 mm");
     ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
-    ctx.fillText("Cu foil 8 µm · 단면 방향 과장 ×" + Math.round((pxPerUm * 7) / (W2 / 10)), x0, base + 54);
+    const xsec = Math.round((pxPerUm * 7) / (W2 / 10));
+    ctx.fillText("Cu foil 8 µm" + (xsec > 2 ? " · 단면 방향 과장 ×" + xsec : ""), x0, base + 54);
 
     // 보조: 두께 프로파일
     if (!P.aux) return;
@@ -1462,7 +1463,7 @@ window.__bat = {
         const oy = Math.min(A[3], B[3]) - Math.max(A[1], B[1]);
         if (ox > 1.5 && oy > 1.5) hits.push(`"${out[i].t}"@${Math.round(out[i].x)},${Math.round(out[i].y)} ⋈ "${out[j].t}"@${Math.round(out[j].x)},${Math.round(out[j].y)}`);
       }
-    return { n: out.length, hits };
+    return { n: out.length, hits, list: out.map((o) => o.t) };
   },
   scene: () => activeName,
   setScene,
