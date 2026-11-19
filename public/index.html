@@ -41,7 +41,7 @@
   .stage{position:relative}
   .stage > .wrap{position:relative;z-index:2}
   @media (max-width:900px){
-    section.hero::after{background:linear-gradient(180deg,rgba(12,11,10,.96) 0%,rgba(12,11,10,.90) 52%,rgba(12,11,10,.35) 74%,rgba(12,11,10,0) 86%)}
+    section.hero::after{background:linear-gradient(180deg,rgba(12,11,10,.97) 0%,rgba(12,11,10,.93) 62%,rgba(12,11,10,.55) 78%,rgba(12,11,10,0) 92%)}
   }
   p{margin:0;text-wrap:pretty}
   button,input,label{font:inherit;color:inherit}
@@ -488,8 +488,8 @@ const mixing = (() => {
   // 히어로는 패널이 아니라 화면을 가득 채우는 하나의 오브젝트다
   function geom() {
     if (VW <= 900) {
-      const side = Math.min(VW * 0.86, VH * 0.30);            // 본문 아래 밴드에 들어가도록
-      return { side, ox: VW * 0.5 - side / 2, oy: VH * 0.82 - side / 2 };
+      const side = Math.min(VW * 0.80, VH * 0.26);            // 본문 아래 밴드에 들어가도록
+      return { side, ox: VW * 0.5 - side / 2, oy: VH * 0.86 - side / 2 };
     }
     const side = Math.min(VW * 0.98, VH * 1.16);
     return { side, ox: VW * 0.60 - side / 2, oy: VH * 0.5 - side / 2 };
