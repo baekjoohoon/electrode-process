@@ -896,7 +896,7 @@ const drying = (() => {
     const P = layoutPanels(0.54);
     frameBox(P.main, "03", "DRYING · 단면", "증발면 / 집전체");
     const rx0 = P.main.x + 34, ry0 = P.main.y + 62;
-    const rw = P.main.w - 92, rh = P.main.h - 150;
+    const rw = P.main.w - 92, rh = Math.max(64, P.main.h - 150);   // 낮은 패널에서도 축이 뒤집히지 않도록
 
     // 필드
     const px = img.data;
@@ -1057,7 +1057,8 @@ const calendering = (() => {
     frameBox(P.main, "04", "CALENDERING · 단면", "roll gap " + gapUm.toFixed(0) + " µm");
 
     const spanX = COLS * SP + 2;
-    const sc = Math.min((P.main.w - 120) / spanX, (P.main.h - 170) / (T0 + 10));
+    // 패널이 낮으면(가로 모드 휴대폰 등) 배율이 음수가 되어 호를 그릴 수 없다 — 하한을 둔다
+    const sc = Math.max(0.12, Math.min((P.main.w - 120) / spanX, (P.main.h - 170) / (T0 + 10)));
     const ox = P.main.x + 60, oy = P.main.y + 96;
     const X = (v) => ox + v * sc, Y = (v) => oy + v * sc;
     const h = targetH(), floorY = T0 + 1.5, topY = floorY - h;
@@ -1290,9 +1291,11 @@ function plotPanel(r, opt) {
   ctx.fillText(opt.yLabel || "", 0, 0);
   ctx.restore();
   if (opt.legend) {
+    const titleW = ctx.measureText(opt.title || "").width;
     ctx.font = "500 10px " + MONO;
     let lw = 0;
     for (const s of opt.legend) lw += 14 + ctx.measureText(s.name).width;
+    if (titleW + lw + 26 > r.w) return;   // 좁은 패널에서는 범례를 생략해 제목과 겹치지 않게
     let lx = r.x + r.w - lw;
     const ly = r.y + 13;
     for (const s of opt.legend) {
