@@ -1397,26 +1397,30 @@ addEventListener("pointerup", () => { down = false; });
 let last = 0, acc = 0;
 const FIXED = 1 / 60;
 function frame(now) {
-  if (frozen) { requestAnimationFrame(frame); return; }
+  requestAnimationFrame(frame);                 // 어떤 예외가 나도 루프는 살아 있게
+  if (frozen) return;
   const real = last ? clamp((now - last) / 1000, 0.001, 0.25) : FIXED;
   last = now;
-  ctx.clearRect(0, 0, VW, VH);
-  if (active) {
-    acc = Math.min(acc + real, FIXED * 3);          // 프레임이 밀려도 물리 시간은 유지
-    while (acc >= FIXED) { active.step(FIXED); acc -= FIXED; }
-    active.render();
+  try {
+    ctx.clearRect(0, 0, VW, VH);
+    if (active) {
+      acc = Math.min(acc + real, FIXED * 3);      // 프레임이 밀려도 물리 시간은 유지
+      while (acc >= FIXED) { active.step(FIXED); acc -= FIXED; }
+      active.render();
+    }
+    if (fade > 0) {                     // 장면 전환 시 흰 막
+      fade = Math.max(0, fade - real * 2.6);
+      ctx.save();
+      ctx.globalAlpha = fade * 0.9;
+      ctx.fillStyle = paper;
+      ctx.fillRect(world.x - 2, world.y - 2, world.w + 4, world.h + 4);
+      ctx.restore();
+    }
+    hudT += real;
+    if (hudT > 0.12) { hudT = 0; paintHud(); pickScene(); }
+  } catch (e) {
+    (window.__err = window.__err || []).push(String(e && e.message || e));
   }
-  if (fade > 0) {                       // 장면 전환 시 흰 막
-    fade = Math.max(0, fade - dt * 2.6);
-    ctx.save();
-    ctx.globalAlpha = fade * 0.9;
-    ctx.fillStyle = paper;
-    ctx.fillRect(world.x - 2, world.y - 2, world.w + 4, world.h + 4);
-    ctx.restore();
-  }
-  hudT += real;
-  if (hudT > 0.12) { hudT = 0; paintHud(); pickScene(); }
-  requestAnimationFrame(frame);
 }
 let frozen = false;
 window.__bat = {
