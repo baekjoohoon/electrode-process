@@ -365,7 +365,7 @@ const mixing = (() => {
   const img = rx.createImageData(RES, RES);
   const G = 24, cell = new Float32Array(G * G), blur = new Float32Array(G * G);
   const impR = 0.24 * N;
-  let t = 0, uni = 0, cv0 = 0, cmin = 0, cmax = 0;
+  let t = 0, uni = 0, uniSm = 0, cv0 = 0, cmin = 0, cmax = 0;
   const hist = [];
 
   function reset() {
@@ -448,6 +448,7 @@ const mixing = (() => {
     const cv = mean > 0 ? Math.sqrt(Math.max(0, s2 / src.length - mean * mean)) / mean : 0;
     if (!cv0 && cv > 0.01) cv0 = cv;                       // 초기 불균일도를 기준으로 잡는다
     uni = cv0 > 0 ? clamp(1 - cv / cv0, 0, 1) : 0;         // 덩어리가 풀린 정도
+    uniSm += (uni - uniSm) * 0.02;                        // 표시용 완만한 추세(숫자가 튀지 않게)
     if (!hist.length || t - hist[hist.length - 1][0] > 0.4) { hist.push([t, uni]); if (hist.length > 120) hist.shift(); }
     cmin = +cv.toFixed(3); cmax = +cv0.toFixed(3);
   }
@@ -586,7 +587,7 @@ const mixing = (() => {
     step, render, pointer,
     metrics: () => [
       ["불균일 지수", cmin.toFixed(2)],
-      ["덩어리 풀림", (uni * 100).toFixed(1) + " %"],
+      ["덩어리 풀림", (uniSm * 100).toFixed(1) + " %"],
       ["최대 전단", (F.maxSpeed() * 11).toFixed(0) + " 1/s"],
     ],
     probe: () => {
@@ -597,7 +598,7 @@ const mixing = (() => {
         stdX: +Math.sqrt(sxx / NP - mx * mx).toFixed(2), stdY: +Math.sqrt(syy / NP - my * my).toFixed(2),
         p0: [+px[0].toFixed(1), +py[0].toFixed(1)], p1: [+px[1].toFixed(1), +py[1].toFixed(1)] };
     },
-    chips: () => ({ "m-uni": (uni * 100).toFixed(1) + " %", "m-shear": (F.maxSpeed() * 11).toFixed(0) + " 1/s", "m-vort": cmin.toFixed(2) }),
+    chips: () => ({ "m-uni": (uniSm * 100).toFixed(1) + " %", "m-shear": (F.maxSpeed() * 11).toFixed(0) + " 1/s", "m-vort": cmin.toFixed(2) }),
     reset,
   };
 })();
