@@ -4,8 +4,8 @@
 소개하는 **한 장짜리 랜딩 페이지**이며, 각 단계의 그림은 **직접 작성한 물리 계산**이 실시간으로
 그립니다. 외부 라이브러리를 쓰지 않았습니다.
 
-- 공개 주소: https://electrode-process.baekjoohoon.workers.dev (Cloudflare Workers, 배포 디렉터리 `dev/`)
-- 로컬 미리보기: `node tools/serve.mjs "C:/AI_Agent/제1회 해커톤 랜딩톤" 8899` → `http://127.0.0.1:8899/dev/index.html`
+- 공개 주소: https://electrode-process.baekjoohoon.workers.dev (Cloudflare Workers, 배포 디렉터리 `public/`)
+- 로컬 미리보기: `node tools/serve.mjs "C:/AI_Agent/제1회 해커톤 랜딩톤" 8899` → `http://127.0.0.1:8899/public/index.html`
 - 제출 마감: 2026년 12월 4일 24:00 (KST)
 
 ## 이야기
@@ -41,7 +41,7 @@
 - **외부 라이브러리 0**: 렌더는 캔버스 2D, 화면 구성은 CSS. 물리·수치는 전부 이 저장소의 코드.
 - **계측기 룩**: 흰 종이 위 정밀 도면. 축·눈금·단위, 프레임·모서리 틱·번호/제목 블록·스케일 바.
 - **한 장 규칙 준수**: 다른 주소로 넘어가는 링크 0개. 스크롤 한 페이지에서 네 단계가 모두 이어집니다.
-- **서체**: Pretendard 사용 글자만 남겨 자체 호스팅(`dev/fonts/pretendard-subset.woff2`, 90KB),
+- **서체**: Pretendard 사용 글자만 남겨 자체 호스팅(`public/fonts/pretendard-subset.woff2`, 90KB),
   OFL 1.1 전문 포함(`LICENSE-Pretendard.txt`). 외부 이미지·음원·영상 없음.
 - **반응형**: 900px 이하에서는 보조 차트를 생략하고 시뮬레이션 밴드만 남겨 모바일에서도 읽힙니다.
 - **라벨 충돌 검사**: `__bat.textRects()` 로 장면별 라벨 사각형을 뽑아 1440×900 / 1920×1080 /
@@ -50,13 +50,13 @@
 ## 파일 구조
 
 ```
-dev/
+public/
   index.html                      # 페이지 전부 (HTML + CSS + 물리 + 계측 렌더)
   fonts/pretendard-subset.woff2   # 사용 글자만 남긴 서브셋 (90KB)
 tools/
   serve.mjs                       # 로컬 정적 서버 (no-store)
   subset-font.sh                  # 폰트 서브셋 재생성
-wrangler.preview.jsonc            # Cloudflare Workers 배포 설정 (electrode-process)
+wrangler.jsonc                    # Cloudflare Workers 배포 설정 (electrode-process)
 docs/                             # 제출 문서 · 스크린샷 · 데모 영상
 LICENSE-Pretendard.txt            # SIL Open Font License 1.1 전문
 ```

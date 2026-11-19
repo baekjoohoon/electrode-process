@@ -8,7 +8,7 @@
 |---|---|
 | 프로젝트 제목 | `전극은 반죽에서 시작한다 — 2차전지 전극 공정 4단계` |
 | 공개 링크 (필수) | `https://electrode-process.baekjoohoon.workers.dev` |
-| 저장소 링크 | `https://github.com/baekjoohoon/domino12` |
+| 저장소 링크 | `https://github.com/baekjoohoon/electrode-process` |
 | 데모 영상 (선택) | `docs/electrode-demo.mp4` — 22초 · 1440×900 · 24fps · H.264 · 무음 |
 | 스크린샷 (최대 5장) | `docs/screenshots/battery-01-*.png` ~ `battery-05-*.png` |
 
