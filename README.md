@@ -63,8 +63,18 @@ LICENSE-Pretendard.txt            # SIL Open Font License 1.1 전문
 
 ## 데모 영상 · 스크린샷
 
-- 데모 영상(22초, 소리 없음): [`docs/electrode-demo.mp4`](docs/electrode-demo.mp4)
+- 데모 영상(22초, 소리 없음, 1440×900, 1.6MB): [`docs/electrode-demo.mp4`](docs/electrode-demo.mp4)
 - 스크린샷: [`docs/screenshots/`](docs/screenshots/)
+
+| 01 믹싱 | 02 코팅 | 03 건조 |
+|---|---|---|
+| ![믹싱](docs/screenshots/01-mixing.png) | ![코팅](docs/screenshots/02-coating.png) | ![건조](docs/screenshots/03-drying.png) |
+
+| 04 압연 | 05 모바일(건조) |
+|---|---|
+| ![압연](docs/screenshots/04-calendering.png) | ![모바일](docs/screenshots/05-mobile-drying.png) |
+
+영상 시나리오: 히어로에서 반죽을 휘젓고(마우스 드래그) → 코팅 틈새 28→10 → 건조 압력을 101→5 kPa → 압연 간격 118→62 µm → 마무리. 슬라이더 조작이 실제 계산값을 바꾸는 장면을 담았습니다.
 
 ## 개발용 훅
 
