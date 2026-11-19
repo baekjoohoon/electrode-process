@@ -5,19 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>전극은 반죽에서 시작한다 — 2차전지 전극 공정 4단계</title>
 <meta name="description" content="믹싱, 코팅, 건조, 압연. 2차전지 전극이 만들어지는 네 단계를 브라우저 안에서 직접 구현한 물리 모델로 따라갑니다. 품질이 갈리는 곳은 세 번째, 건조입니다.">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#0c0b0a">
 <meta property="og:type" content="website">
 <meta property="og:title" content="전극은 반죽에서 시작한다">
 <meta property="og:description" content="2차전지 전극 공정 4단계를 직접 구현한 물리 모델로 체험하는 한 장짜리 페이지.">
 <meta property="og:locale" content="ko_KR">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23101010'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23b4531f'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230c0b0a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23f6f4f0'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23b4531f'/%3E%3C/svg%3E">
 <style>
   @font-face{font-family:"PretendardSubset";src:url("fonts/pretendard-subset.woff2") format("woff2");font-weight:45 920;font-style:normal;font-display:swap}
   :root{
-    --ink:#101010; --ink-soft:#3c3c38; --muted:#71716a; --muted-strong:#55554f;
-    --line:#e4e4df; --line-soft:#eeece8;
-    --cu:#b4531f;               /* 구리 집전체에서 가져온 강조색 */
-    --paper:#ffffff; --wash:#f7f7f4;
+    --ink:#f6f4f0; --ink-soft:#d3cfc7; --muted:#8f8a82; --muted-strong:#b6b1a9;
+    --line:rgba(246,244,240,.16); --line-soft:rgba(246,244,240,.075);
+    --cu:#c96a2e;               /* 구리 집전체에서 가져온 강조색 */
+    --paper:#0c0b0a; --wash:#141211;
     --pad:clamp(20px,4.6vw,52px); --col:1120px;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
@@ -28,7 +28,21 @@
     font-weight:420;font-size:17px;line-height:1.75;letter-spacing:-0.011em;
     -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
   ::selection{background:var(--ink);color:var(--paper)}
-  h1,h2,h3{margin:0;font-weight:660;letter-spacing:-0.035em;line-height:1.07;text-wrap:balance}
+  h1,h2,h3{margin:0;font-weight:660;letter-spacing:-0.035em;line-height:1.03;text-wrap:balance}
+  .em{font-family:Georgia,"Times New Roman",Times,serif;font-style:italic;font-weight:400;letter-spacing:-.015em}
+  h1{font-size:clamp(2.75rem,7.6vw,6.5rem);font-weight:700;letter-spacing:-.045em;line-height:0.98}
+  h2{font-size:clamp(2.1rem,5.4vw,4.4rem);letter-spacing:-.04em}
+  .lede{font-size:clamp(1.05rem,1.5vw,1.35rem);line-height:1.6;color:var(--ink-soft);max-width:34ch}
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(120% 80% at 78% 22%,rgba(201,106,46,.16),transparent 58%),radial-gradient(90% 70% at 20% 90%,rgba(90,86,80,.18),transparent 60%),linear-gradient(180deg,#100e0c,#0a0908)}
+  body::after{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.05;mix-blend-mode:screen;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+  main{position:relative;z-index:2}
+  .stage{position:relative}
+  .stage > .wrap{position:relative;z-index:2}
+  @media (max-width:900px){
+    section.hero::after{background:linear-gradient(180deg,rgba(12,11,10,.96) 0%,rgba(12,11,10,.90) 52%,rgba(12,11,10,.35) 74%,rgba(12,11,10,0) 86%)}
+  }
   p{margin:0;text-wrap:pretty}
   button,input,label{font:inherit;color:inherit}
   @supports (text-box-trim:trim-both){ h1,h2,h3{ text-box:trim-both cap alphabetic } }
@@ -333,7 +347,7 @@ class Fluid {
 /* ══════════════════════════════════════════════════════════
    2. 장면들 — 각 장면은 자기 물리와 지표를 가진다
    ══════════════════════════════════════════════════════════ */
-const paper = "#ffffff", inkRGB = [16, 16, 16], cuRGB = [180, 83, 31];
+const paper = "#0c0b0a", inkRGB = [246, 244, 240], cuRGB = [201, 106, 46];
 
 function makeImage(w, h) {
   const c = document.createElement("canvas");
@@ -437,12 +451,24 @@ const mixing = (() => {
     if (!hist.length || t - hist[hist.length - 1][0] > 0.4) { hist.push([t, uni]); if (hist.length > 120) hist.shift(); }
     cmin = +cv.toFixed(3); cmax = +cv0.toFixed(3);
   }
+  // 히어로는 패널이 아니라 화면을 가득 채우는 하나의 오브젝트다
+  function geom() {
+    if (VW <= 900) {
+      const side = Math.min(VW * 0.90, VH * 0.34);
+      return { side, ox: VW * 0.5 - side / 2, oy: VH * 0.78 - side / 2 };
+    }
+    const side = Math.min(VW * 0.98, VH * 1.16);
+    return { side, ox: VW * 0.60 - side / 2, oy: VH * 0.5 - side / 2 };
+  }
   function render() {
-    const P = layoutPanels(0.66);
-    frameBox(P.main, "01", "STIRRED TANK · 상면", NP.toLocaleString("en-US") + " particles");
-
-    const side = Math.min(P.main.w - 46, P.main.h - 96);
-    const ox = P.main.x + (P.main.w - side) / 2, oy = P.main.y + (P.main.h - side) / 2 + 8;
+    const { side, ox, oy } = geom();
+    const ccx0 = ox + side / 2, ccy0 = oy + side / 2, RW0 = side * 0.47;
+    const rg = ctx.createRadialGradient(ccx0, ccy0, RW0 * 0.15, ccx0, ccy0, RW0 * 2.1);
+    rg.addColorStop(0, "rgba(201,106,46,0.26)");
+    rg.addColorStop(0.55, "rgba(201,106,46,0.09)");
+    rg.addColorStop(1, "rgba(201,106,46,0)");
+    ctx.fillStyle = rg;
+    ctx.fillRect(0, 0, VW, VH);
 
     const d = img.data;
     d.fill(0);
@@ -464,7 +490,7 @@ const mixing = (() => {
         if (gx < 0 || gy < 0 || gx >= RES || gy >= RES) continue;
         const o = (gy * RES + gx) * 4;
         const al = st === 0 ? a : a * 0.5;
-        if (d[o + 3] < al) { d[o] = 16; d[o + 1] = 16; d[o + 2] = 16; d[o + 3] = al; }
+        if (d[o + 3] < al) { d[o] = 233; d[o + 1] = 228; d[o + 2] = 221; d[o + 3] = al; }
       }
     }
     rx.putImageData(img, 0, 0);
@@ -474,8 +500,8 @@ const mixing = (() => {
     ctx.rect(ox, oy, side, side);
     ctx.clip();
     const g = ctx.createLinearGradient(ox, oy, ox, oy + side);
-    g.addColorStop(0, "rgba(16,16,16,0.010)");
-    g.addColorStop(1, "rgba(16,16,16,0.045)");
+    g.addColorStop(0, "rgba(242,239,234,0.012)");
+    g.addColorStop(1, "rgba(242,239,234,0.05)");
     ctx.fillStyle = g;
     ctx.fillRect(ox, oy, side, side);
     ctx.imageSmoothingEnabled = true;
@@ -500,7 +526,7 @@ const mixing = (() => {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.save();
-    ctx.shadowColor = "rgba(16,16,16,0.22)";
+    ctx.shadowColor = "rgba(242,239,234,0.22)";
     ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 5;
     ctx.fillStyle = CU + "0.035)";
@@ -533,36 +559,14 @@ const mixing = (() => {
     ctx.beginPath(); ctx.arc(0, 0, R * 0.115, 0, Math.PI * 2); ctx.fillStyle = gh; ctx.fill();
     ctx.restore();
 
-    // 축 눈금 (탱크 폭 2 m 가정: 500 mm 간격)
-    for (let q = 1; q < 4; q++) {
-      const yy = oy + (side * q) / 4;
-      hair(0.14, ox - 5, yy, ox, yy);
-    }
-    scaleBar(ox + 8, oy + side + 18, side * 0.25, "500 mm");
+    // 최소 캡션만 남긴다 (수치는 HUD가 보여 준다)
     ctx.fillStyle = MU + "1)"; ctx.font = "500 10.5px " + MONO;
-    ctx.fillText("탱크 Ø 2 m · 상면", ox, oy - 8);
-
-    // 보조: 덩어리 풀림 추이
-    if (!P.aux) return;
-    const pts = hist.length > 1
-      ? hist.map((h) => [(h[0] - hist[0][0]) / Math.max(0.001, hist[hist.length - 1][0] - hist[0][0]), h[1]])
-      : [[0, uni], [1, uni]];
-    plotPanel(P.aux, {
-      title: "덩어리 풀림 추이",
-      xLabel: "t (s)", yLabel: "%", yMax: 1, xMax: 1,
-      series: [{ points: pts, color: CU + "0.95)", width: 1.4 },
-               { points: [[0, 0], [1, 0]], color: INK + "0.12)", width: 1 }],
-      legend: [{ name: "1 − 불균일/초기", color: CU + "0.95)" }],
-    });
-    ctx.fillStyle = INK + "0.95)"; ctx.font = "700 13px " + MONO;
-    ctx.fillText((uni * 100).toFixed(1) + "%", P.aux.x, P.aux.y + P.aux.h + 4);
-    ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
-    ctx.fillText("불균일 지수 " + cmin.toFixed(2) + " · 전단 " + (F.maxSpeed() * 11).toFixed(0) + " 1/s", P.aux.x + 46, P.aux.y + P.aux.h + 4);
+    ctx.fillText("탱크 Ø 2 m · 상면 · 교반 중 — 끌어서 휘저어 보세요", Math.max(VW * 0.06, ccx - RWp * 0.9), Math.min(VH - 24, ccy + RWp * 0.92));
+    void hist; void uni; void cmin;
   }
   function pointer(x0, y0, dx, dy, kind) {
     if (kind === "down") { reset(); return; }
-    const side = Math.min(world.w, world.h);
-    const ox = world.x + (world.w - side) / 2, oy = world.y + (world.h - side) / 2;
+    const { side, ox, oy } = geom();
     const gx = ((x0 - ox) / side) * N, gy = ((y0 - oy) / side) * M;
     for (let j = 2; j < M; j++) for (let i = 2; i < N; i++) {
       if ((i - gx) ** 2 + (j - gy) ** 2 < 200) { const k = F.at(i, j); F.u[k] += dx * 0.8; F.v[k] += dy * 0.8; }
@@ -691,8 +695,8 @@ const coating = (() => {
     ctx.lineTo(x1, base);
     ctx.closePath();
     const gf = ctx.createLinearGradient(0, base - 40, 0, base);
-    gf.addColorStop(0, "rgba(28,28,30,0.96)");
-    gf.addColorStop(1, "rgba(8,8,9,0.98)");
+    gf.addColorStop(0, "rgba(238,234,228,0.95)");
+    gf.addColorStop(1, "rgba(234,230,224,0.86)");
     ctx.fillStyle = gf;
     ctx.fill();
     ctx.strokeStyle = INK + "0.9)"; ctx.lineWidth = 1; ctx.stroke();
@@ -726,7 +730,7 @@ const coating = (() => {
     ctx.fillStyle = gd; ctx.fill();
     ctx.strokeStyle = INK + "0.45)"; ctx.lineWidth = 1; ctx.stroke();
     // 노즐 슬롯 (립 두 개)
-    ctx.fillStyle = "rgba(22,22,24,0.96)";
+    ctx.fillStyle = "rgba(238,234,228,0.95)";
     const lipW = 9, lipGap = 12, lipH = Math.max(14, by - (dieY + dieH) + 6);
     ctx.fillRect(Math.round(bx - lipGap / 2 - lipW), Math.round(dieY + dieH), lipW, lipH);
     ctx.fillRect(Math.round(bx + lipGap / 2), Math.round(dieY + dieH), lipW, lipH);
@@ -1105,7 +1109,7 @@ const calendering = (() => {
       const hot = crush > 1 && pt.y > topY + h * 0.4;
       ctx.beginPath();
       ctx.ellipse(X(pt.x), Y(pt.y), rr * sc * sx, rr * sc * sy, 0, 0, Math.PI * 2);
-      ctx.fillStyle = hot ? CU + "0.92)" : "rgba(16,16,16,0.88)";
+      ctx.fillStyle = hot ? CU + "0.92)" : "rgba(242,239,234,0.92)";
       ctx.fill();
     }
     ctx.restore();
@@ -1171,7 +1175,7 @@ const calendering = (() => {
    계기판 크롬 — 축·눈금·스케일 바·보조 차트 (모든 장면 공용)
    ══════════════════════════════════════════════════════════ */
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", PretendardSubset, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
-const INK = "rgba(16,16,16,", CU = "rgba(180,83,31,", MU = "rgba(113,113,106,";
+const INK = "rgba(246,244,240,", CU = "rgba(201,106,46,", MU = "rgba(150,145,138,";
 
 function hair(a, x1, y1, x2, y2, w) {
   ctx.strokeStyle = INK + (a == null ? 0.22 : a) + ")";
@@ -1184,7 +1188,7 @@ function hair(a, x1, y1, x2, y2, w) {
 
 // 주 패널 상자 + 모서리 틱 + 번호/제목 블록
 function frameBox(r, no, title, sub) {
-  ctx.strokeStyle = INK + "0.55)";
+  ctx.strokeStyle = INK + "0.26)";
   ctx.lineWidth = 1;
   ctx.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
   const t = 10;
@@ -1316,11 +1320,13 @@ function plotPanel(r, opt) {
 // 장면 배치: 주 패널(좌) + 보조 패널(우)
 function layoutPanels(mainRatio) {
   if (VW <= 900) return { main: { x: world.x, y: world.y, w: world.w, h: world.h }, aux: null };
-  const gap = Math.max(18, world.w * 0.035);
-  const mw = world.w * (mainRatio || 0.60);
+  // 시네마틱: 주 비주얼은 화면 오른쪽을 크게 차지하고, 보조 차트는 그 안에 겹쳐 놓는다
+  const m = { x: VW * 0.42, y: VH * 0.06, w: VW * 0.545, h: VH * 0.88 };
+  const aw = Math.min(244, m.w * 0.34);
+  void mainRatio;
   return {
-    main: { x: world.x, y: world.y, w: mw, h: world.h },
-    aux: { x: world.x + mw + gap, y: world.y + world.h * 0.06, w: world.w - mw - gap, h: world.h * 0.52 },
+    main: m,
+    aux: { x: m.x + m.w - aw - 80, y: m.y + 20, w: aw, h: Math.min(158, m.h * 0.26) },   // 주 패널의 오른쪽 축 라벨과 겹치지 않게 안쪽으로
   };
 }
 
