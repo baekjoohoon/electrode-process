@@ -36,6 +36,10 @@
   #cv{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:pan-y;z-index:0}
 
   .wrap{max-width:var(--col);margin:0 auto;padding-inline:var(--pad)}
+  /* 데스크탑: 본문은 왼쪽 절반 안에 머물러 계측 패널과 겹치지 않게 */
+  @media (min-width:901px){
+    section.stage > .wrap{max-width:calc(50vw - 90px);margin-inline:var(--pad) auto}
+  }
   .eyebrow{font-family:var(--mono);font-size:.6875rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:.75em}
   .eyebrow::before{content:"";width:22px;height:1px;background:var(--line);flex:none}
   main{position:relative;z-index:1}
