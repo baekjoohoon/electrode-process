@@ -65,7 +65,7 @@ LICENSE-Pretendard.txt            # SIL Open Font License 1.1 전문
 
 ## 데모 영상 · 스크린샷
 
-- 데모 영상(22초, 소리 없음, 1440×900, 1.6MB): [`docs/electrode-demo.mp4`](docs/electrode-demo.mp4)
+- 데모 영상(22초, 소리 없음, 1440×900, 4.2MB): [`docs/electrode-demo.mp4`](docs/electrode-demo.mp4)
 - 스크린샷: [`docs/screenshots/`](docs/screenshots/)
 
 | 01 믹싱 | 02 코팅 | 03 건조 |
