@@ -60,6 +60,8 @@
 
   .hud{position:fixed;left:var(--pad);bottom:14px;z-index:2;font-family:var(--mono);font-size:.75rem;color:var(--muted-strong);display:grid;gap:3px;pointer-events:none;background:color-mix(in srgb,var(--paper) 82%,transparent);padding:10px 12px 9px;border:1px solid var(--line)}
   .hud .n{color:var(--ink);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:.6875rem}
+  .hud .row{display:flex;gap:7px;align-items:baseline}
+  .hud .live{color:var(--muted);font-size:.625rem;letter-spacing:.02em;white-space:nowrap}
   .hud b{color:var(--ink);font-weight:600}
   .hud .h{color:var(--muted)}
 
@@ -80,7 +82,7 @@
 <canvas id="cv" aria-hidden="true"></canvas>
 
 <aside class="hud" id="hud" aria-hidden="true">
-  <span class="n" id="hud-name">MIXING</span>
+  <span class="row"><span class="n" id="hud-name">MIXING</span><span class="live">실시간 계산 · 외부 라이브러리 없음</span></span>
   <span id="hud-line1">—</span>
   <span id="hud-line2">—</span>
   <span class="h" id="hud-hint">—</span>
