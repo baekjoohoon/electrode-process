@@ -488,8 +488,8 @@ const mixing = (() => {
   // 히어로는 패널이 아니라 화면을 가득 채우는 하나의 오브젝트다
   function geom() {
     if (VW <= 900) {
-      const side = Math.min(VW * 0.90, VH * 0.34);
-      return { side, ox: VW * 0.5 - side / 2, oy: VH * 0.78 - side / 2 };
+      const side = Math.min(VW * 0.86, VH * 0.30);            // 본문 아래 밴드에 들어가도록
+      return { side, ox: VW * 0.5 - side / 2, oy: VH * 0.82 - side / 2 };
     }
     const side = Math.min(VW * 0.98, VH * 1.16);
     return { side, ox: VW * 0.60 - side / 2, oy: VH * 0.5 - side / 2 };
