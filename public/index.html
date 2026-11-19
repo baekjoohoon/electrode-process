@@ -133,7 +133,7 @@
       <div class="col">
         <span class="eyebrow">02 — 코팅</span>
         <h2>얇게, 고르게 바른다</h2>
-        <p class="body">반죽을 구리박이나 알루미늄박 위에 폭 1미터, 두께 100마이크로미터 안팎으로 바릅니다. 조금만 두꺼우면 속이 마르지 않고, 조금만 얇으면 담을 수 있는 양이 줄어듭니다.</p>
+        <p class="body">반죽을 구리박이나 알루미늄박 위에 폭 1미터, 젖은 상태 두께 100~200마이크로미터로 바릅니다. 조금만 두꺼우면 속이 마르지 않고, 조금만 얇으면 담을 수 있는 양이 줄어듭니다. 마른 뒤 눌러서 60~70마이크로미터로 만듭니다.</p>
         <p class="body">박이 지나가는 속도와 블레이드 틈새가 여기서 두께를 정합니다. 슬라이더를 끝까지 밀면 실제로 무늬가 생깁니다.</p>
         <div class="ctl">
           <label>블레이드 틈새 <b id="c-gapv">—</b><input id="c-gap" type="range" min="8" max="30" step="1" value="14"></label>
@@ -659,7 +659,7 @@ const coating = (() => {
     mean = n ? s / n : 0;
     cvv = mean > 1e-4 ? Math.sqrt(Math.max(0, s2 / n - mean * mean)) / mean : 0;
   }
-  const UM = 12.4;                                   // 셀 → µm 환산(웨트 두께 기준)
+  const UM = 82;                                     // 셀 → µm 환산(웨트 두께 기준, 실제 슬롯다이 코팅 두께대)
   function render() {
     const P = layoutPanels(0.60);
     frameBox(P.main, "02", "SLOT-DIE COATING · 단면", "wet film on Cu foil");
@@ -754,7 +754,7 @@ const coating = (() => {
     ctx.moveTo(bx + lipGap / 2 + lipW + 2, slotY); ctx.lineTo(bx + lipGap / 2 + lipW + 26, slotY);
     ctx.stroke();
     ctx.fillStyle = CU + "1)"; ctx.font = "600 10px " + MONO;
-    ctx.fillText("노즐 " + (lipGap * 2.2).toFixed(0) + " µm", bx + lipGap / 2 + lipW + 29, slotY + 3);
+    ctx.fillText("노즐 " + (lipGap * 8).toFixed(0) + " µm", bx + lipGap / 2 + lipW + 29, slotY + 3);
     // 틈새 치수선
     const dimX = bx + 26;
     ctx.strokeStyle = CU + "0.9)"; ctx.lineWidth = 1;
@@ -767,12 +767,13 @@ const coating = (() => {
     ctx.translate(dimX + 11, (by + base) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = CU + "1)"; ctx.font = "600 10px " + MONO; ctx.textAlign = "center";
-    ctx.fillText((gap * 2.2).toFixed(0) + " µm", 0, 0);
+    ctx.fillText((gap * 8).toFixed(0) + " µm", 0, 0);
     ctx.textAlign = "start";
     ctx.restore();
 
     // 세로 축 (µm) — 축선 + 눈금 + 값
-    const step2 = span <= 2 ? 0.5 : span <= 5 ? 1 : 2;
+    let step2 = span <= 2 ? 0.5 : span <= 5 ? 1 : span <= 20 ? 5 : span <= 60 ? 10 : 25;
+    while (span / step2 > Math.max(3, Math.floor((P.main.h - 150) / 26))) step2 *= 2;   // 눈금이 겹치지 않는 간격
     ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(Math.round(x1 + 14) + 0.5, Math.round(base) + 0.5);
@@ -806,8 +807,10 @@ const coating = (() => {
     ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
     ctx.fillText("편차 " + (cvv * 100).toFixed(1) + "% · 코팅 " + len.toFixed(0) + "%", P.aux.x + 62, P.aux.y + P.aux.h + 4);
   }
+  let lastMain = null;
   function pointer(x0, y0, dx, dy) {
-    const gx = ((x0 - world.x) / world.w) * N, gy = ((y0 - world.y) / world.h) * M;
+    const r = lastMain || world;
+    const gx = ((x0 - r.x) / r.w) * N, gy = ((y0 - r.y) / r.h) * M;
     for (let j = 1; j <= M; j++) for (let i = 1; i <= N; i++) {
       if ((i - gx) ** 2 + (j - gy) ** 2 < 130) { const k = F.at(i, j); F.u[k] += dx * 0.3; F.v[k] += dy * 0.3; }
     }
@@ -817,14 +820,14 @@ const coating = (() => {
     name: "COATING", hint: "슬라이더로 틈새와 속도를 바꿔 보세요 — 끝까지 밀면 무늬가 생깁니다",
     step, render, pointer,
     metrics: () => [
-      ["웨트 두께", (mean * 12.4).toFixed(1) + " µm"],
+      ["웨트 두께", (mean * UM).toFixed(1) + " µm"],
       ["두께 편차", (cvv * 100).toFixed(1) + " %"],
       ["코팅된 길이", len.toFixed(0) + " %"],
     ],
     probe: () => ({ mean: +mean.toFixed(3), cv: +cvv.toFixed(4), len: +len.toFixed(1), maxSpeed: +F.maxSpeed().toFixed(2) }),
-    chips: () => ({ "c-th": (mean * 12.4).toFixed(1) + " µm", "c-cv": (cvv * 100).toFixed(1) + " %", "c-len": len.toFixed(0) + " %" }),
+    chips: () => ({ "c-th": (mean * UM).toFixed(1) + " µm", "c-cv": (cvv * 100).toFixed(1) + " %", "c-len": len.toFixed(0) + " %" }),
     set(k, v) { if (k === "gap") { gap = v; reset(); } if (k === "spd") speed = v; },
-    gapV: () => (gap * 2.2).toFixed(0) + " µm",
+    gapV: () => (gap * 8).toFixed(0) + " µm",
     spdV: () => speed.toFixed(0) + " m/min",
   };
 })();
