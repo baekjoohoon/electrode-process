@@ -340,7 +340,7 @@ function makeImage(w, h) {
 /* ── 01 믹싱 — 슬러리 고형분 2.6만 입자가 격자 유체를 따라 섞인다 ─── */
 const mixing = (() => {
   const N = 120, M = 120, F = new Fluid(N, M);
-  const NP = 26000, RES = 520;
+  const NP = (innerWidth < 900 || innerHeight < 700) ? 15000 : 26000, RES = 520;   // 작은 화면에서는 입자 수를 줄여 60fps 유지
   const px = new Float32Array(NP), py = new Float32Array(NP);
   const rc = document.createElement("canvas"); rc.width = RES; rc.height = RES;
   const rx = rc.getContext("2d");
@@ -435,7 +435,7 @@ const mixing = (() => {
   }
   function render() {
     const P = layoutPanels(0.66);
-    frameBox(P.main, "01", "STIRRED TANK · 상면", (26000).toLocaleString("ko-KR") + " particles");
+    frameBox(P.main, "01", "STIRRED TANK · 상면", NP.toLocaleString("en-US") + " particles");
 
     const side = Math.min(P.main.w - 46, P.main.h - 96);
     const ox = P.main.x + (P.main.w - side) / 2, oy = P.main.y + (P.main.h - side) / 2 + 8;
