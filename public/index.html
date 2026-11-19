@@ -609,7 +609,7 @@ const mixing = (() => {
 const coating = (() => {
   const N = 244, M = 56, F = new Fluid(N, M);
   const { c, x, img } = makeImage(N, M);
-  let gap = 14, speed = 18, mean = 0, cvv = 0, len = 0;
+  let gap = 14, speed = 18, mean = 0, cvv = 0, len = 0, meanS = 0, cvvS = 0;
   const BX = Math.round(N * 0.26);
 
   function reset() {
@@ -658,6 +658,8 @@ const coating = (() => {
     len = n ? (wet / n) * 100 : 0;
     mean = n ? s / n : 0;
     cvv = mean > 1e-4 ? Math.sqrt(Math.max(0, s2 / n - mean * mean)) / mean : 0;
+    meanS += (mean - meanS) * 0.05;                       // 표시용: 필름이 만들어지는 동안 숫자가 튀지 않게
+    cvvS += (cvv - cvvS) * 0.05;
   }
   const UM = 82;                                     // 셀 → µm 환산(웨트 두께 기준, 실제 슬롯다이 코팅 두께대)
   function render() {
@@ -804,9 +806,9 @@ const coating = (() => {
       legend: [{ name: "측정", color: INK + "0.9)" }, { name: "목표", color: CU + "0.5)" }],
     });
     ctx.fillStyle = INK + "0.9)"; ctx.font = "600 11px " + MONO;
-    ctx.fillText((mean * UM).toFixed(1) + " µm", P.aux.x, P.aux.y + P.aux.h + 4);
+    ctx.fillText((meanS * UM).toFixed(1) + " µm", P.aux.x, P.aux.y + P.aux.h + 4);
     ctx.fillStyle = MU + "1)"; ctx.font = "500 10px " + MONO;
-    ctx.fillText("편차 " + (cvv * 100).toFixed(1) + "% · 코팅 " + len.toFixed(0) + "%", P.aux.x + 62, P.aux.y + P.aux.h + 4);
+    ctx.fillText("편차 " + (cvvS * 100).toFixed(1) + "% · 코팅 " + len.toFixed(0) + "%", P.aux.x + 62, P.aux.y + P.aux.h + 4);
   }
   let lastMain = null;
   function pointer(x0, y0, dx, dy) {
@@ -821,12 +823,13 @@ const coating = (() => {
     name: "COATING", hint: "슬라이더로 틈새와 속도를 바꿔 보세요 — 끝까지 밀면 무늬가 생깁니다",
     step, render, pointer,
     metrics: () => [
-      ["웨트 두께", (mean * UM).toFixed(1) + " µm"],
-      ["두께 편차", (cvv * 100).toFixed(1) + " %"],
+      ["웨트 두께", (meanS * UM).toFixed(1) + " µm"],
+      ["두께 편차", (cvvS * 100).toFixed(1) + " %"],
       ["코팅된 길이", len.toFixed(0) + " %"],
     ],
     probe: () => ({ mean: +mean.toFixed(3), cv: +cvv.toFixed(4), len: +len.toFixed(1), maxSpeed: +F.maxSpeed().toFixed(2) }),
-    chips: () => ({ "c-th": (mean * UM).toFixed(1) + " µm", "c-cv": (cvv * 100).toFixed(1) + " %", "c-len": len.toFixed(0) + " %" }),
+    chips: () => ({ "c-th": (meanS * UM).toFixed(1) + " µm", "c-cv": (cvvS * 100).toFixed(1) + " %", "c-len": len.toFixed(0) + " %" }),
+    primeFrames: 3000,
     set(k, v) { if (k === "gap") { gap = v; reset(); } if (k === "spd") speed = v; },
     gapV: () => (gap * 8).toFixed(0) + " µm",
     spdV: () => speed.toFixed(0) + " m/min",
@@ -1009,6 +1012,7 @@ const drying = (() => {
       }
       return { prog: +prog.toFixed(2), mig: +mig.toFixed(2), ratio: +surfRatio().toFixed(3), cSum: +cSum().toFixed(1), temp, press, bTop: topB, bBot: botB, cTop: cs };
     },
+    primeFrames: 420,
     set(k, v) { if (k === "t") temp = v; if (k === "p") press = v; },
     gapV: null,
     tV: () => temp.toFixed(0) + " °C",
@@ -1029,7 +1033,7 @@ const calendering = (() => {
   const COLS = 38, ROWS = 9, SP = 2.05, R = 1;
   const T0 = (ROWS - 1) * SP + 2 * R;          // 압연 전 두께(격자 단위) ≈ 18.4 = 100 µm
   const parts = [];
-  let gapUm = 100, den = 0, thickUm = 0, por = 0, crush = 0, red = 0;
+  let gapUm = 100, den = 0, thickUm = 0, por = 0, crush = 0, red = 0, t = 0;
 
   function reset() {
     parts.length = 0;
@@ -1040,6 +1044,7 @@ const calendering = (() => {
   // 롤 간격(µm) → 목표 두께. 100µm 를 넘으면 눌리지 않는다.
   function targetH() { return T0 * Math.min(1, gapUm / 100); }
   function step() {
+    t += 1 / 60;                                   // 롤 회전 표시용 시간
     const h = targetH();
     const floorY = T0 + 1.5, topY = floorY - h;
     for (let c = 0; c < COLS; c++) {
@@ -1083,6 +1088,25 @@ const calendering = (() => {
     ctx.beginPath();
     ctx.rect(P.main.x + 30, P.main.y + 40, P.main.w - 60, P.main.h - 110);
     ctx.clip();
+    // 롤 회전 표시(정지해 보이지 않도록) — 롤 표면을 따라 흐르는 눈금
+    const rollTick = (cy, R, dir) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cxr, cy, R, Math.PI, Math.PI * 2);
+      ctx.clip();
+      ctx.strokeStyle = "rgba(20,18,16,0.30)";
+      ctx.lineWidth = 2;
+      for (let k = 0; k < 26; k++) {
+        const a = ((k / 26) + dir * (t * 0.06)) % 1;
+        const ang = Math.PI + a * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(cxr + Math.cos(ang) * (R - 9), cy + Math.sin(ang) * (R - 9));
+        ctx.lineTo(cxr + Math.cos(ang) * R, cy + Math.sin(ang) * R);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+
     // 아래 롤러
     ctx.beginPath();
     ctx.arc(cxr, Y(floorY) + Rroll * sc, Rroll * sc, Math.PI, Math.PI * 2);
@@ -1093,6 +1117,7 @@ const calendering = (() => {
     gDown.addColorStop(0, "rgba(232,230,225,1)");
     gDown.addColorStop(1, "rgba(186,184,178,1)");
     ctx.fillStyle = gDown; ctx.fill();
+    rollTick(Y(floorY) + Rroll * sc, Rroll * sc, 1);
     ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1; ctx.stroke();
     // 위 롤러
     ctx.beginPath();
@@ -1104,6 +1129,7 @@ const calendering = (() => {
     gUp.addColorStop(0, "rgba(150,148,142,1)");
     gUp.addColorStop(1, "rgba(214,212,206,1)");
     ctx.fillStyle = gUp; ctx.fill();
+    rollTick(Y(topY) - Rroll * sc, Rroll * sc, -1);
     ctx.strokeStyle = INK + "0.35)"; ctx.lineWidth = 1; ctx.stroke();
 
     // 입자 (지터 + 압축 변형)
@@ -1170,6 +1196,7 @@ const calendering = (() => {
     ],
     probe: () => ({ den: +den.toFixed(3), thickUm: +thickUm.toFixed(1), red: +red.toFixed(3), por: +por.toFixed(1), crush: +crush.toFixed(1) }),
     chips: () => ({ "k-den": den.toFixed(2) + " g/cc", "k-th": thickUm.toFixed(0) + " µm", "k-por": por.toFixed(0) + " %", "k-crush": crush.toFixed(0) + " %" }),
+    primeFrames: 150,
     set(k, v) { if (k === "gap") gapUm = v; },
     gapV: () => gapUm.toFixed(0) + " µm",
   };
@@ -1336,6 +1363,12 @@ function layoutPanels(mainRatio) {
 }
 
 const SCENES = { mixing, coating, drying, calendering };
+// 첫 방문에 빈 화면을 보지 않도록 코팅·건조·압연은 미리 계산해 둔다 (1회, 약 1초)
+for (const nm of ["coating", "drying", "calendering"]) {
+  const sc = SCENES[nm];
+  const warm = nm === "coating" ? 900 : nm === "drying" ? 420 : 200;
+  for (let i = 0; i < warm; i++) sc.step(1 / 60);
+}
 let active = mixing, fade = 0, activeName = "mixing";
 
 /* ══════════════════════════════════════════════════════════
@@ -1350,6 +1383,7 @@ function setScene(name) {
   $("hud-name").textContent = n;
   $("hud-hint").textContent = active ? active.hint : "공정 요약";
   if (active && active.reset && name === "drying") active.reset();
+  primeLeft = active && active.primeFrames ? active.primeFrames : 0;
   paintHud();
 }
 const stageEls = [...document.querySelectorAll(".stage")];
@@ -1405,7 +1439,7 @@ addEventListener("pointerup", () => { down = false; });
 /* ══════════════════════════════════════════════════════════
    4. 루프
    ══════════════════════════════════════════════════════════ */
-let last = 0, acc = 0;
+let last = 0, acc = 0, primeLeft = 0;
 const FIXED = 1 / 60;
 function frame(now) {
   requestAnimationFrame(frame);                 // 어떤 예외가 나도 루프는 살아 있게
@@ -1417,6 +1451,8 @@ function frame(now) {
     if (active) {
       acc = Math.min(acc + real, FIXED * 3);      // 프레임이 밀려도 물리 시간은 유지
       while (acc >= FIXED) { active.step(FIXED); acc -= FIXED; }
+      // 장면이 막 켜졌을 때: 빈 화면 대신 이미 진행된 상태가 되도록 몇 초를 미리 돌린다(프레임당 6스텝)
+      for (let k = 0; k < 16 && primeLeft > 0; k++, primeLeft--) active.step(FIXED);
       active.render();
     }
     if (fade > 0) {                     // 장면 전환 시 흰 막
