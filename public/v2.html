@@ -102,7 +102,7 @@
   .ab-head p b{color:var(--cu);font-variant-numeric:tabular-nums}
   .ab-split{position:absolute;inset:0;z-index:2;pointer-events:none}
   .ab-split i{position:absolute;left:50%;top:0;bottom:0;width:1px;background:linear-gradient(180deg,rgba(246,244,240,0),rgba(246,244,240,.28) 22%,rgba(246,244,240,.28) 78%,rgba(246,244,240,0))}
-  .ab-side{position:absolute;left:0;right:0;bottom:clamp(28px,6vh,58px);z-index:4;display:grid;grid-template-columns:1fr 1fr;
+  .ab-side{position:absolute;left:0;right:0;top:clamp(268px,38svh,520px);z-index:4;display:grid;grid-template-columns:1fr 1fr;
     pointer-events:none}
   .ab-side .sb{display:grid;justify-items:center;gap:2px;text-align:center}
   .ab-side .lab{font-family:var(--mono);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-strong)}
@@ -207,7 +207,7 @@
   <section class="hero stage" data-scene="hero" id="hero">
     <div class="ab-head">
       <div class="brand"><span><i class="dot"></i>전극 공정 · 건조</span><span>제1회 해커톤: 랜딩톤 출품작</span></div>
-      <h1>같은 반죽을,<br>두 번 말린다</h1>
+      <h1>두 번 말린다</h1>
       <p>다른 것은 압력 하나뿐입니다. 같은 40초 뒤, 표면에 몰리는 바인더가 <b>2.7배</b> 차이납니다.</p>
     </div>
     <div class="ab-split"><i></i></div>
@@ -1015,7 +1015,7 @@ function makeDrying() {
   }
   function render() {
     const P = layoutPanels(0.54);
-    frameBox(P.main, "03", "DRYING · 단면", "증발면 / 집전체");
+    if (!panelMinimal) frameBox(P.main, "03", "DRYING · 단면", "증발면 / 집전체");
     const rx0 = P.main.x + 34, ry0 = P.main.y + 62;
     const rw = P.main.w - 92, rh = Math.max(64, P.main.h - 150);   // 낮은 패널에서도 축이 뒤집히지 않도록
 
@@ -1041,6 +1041,7 @@ function makeDrying() {
     ctx.strokeRect(Math.round(rx0) + 0.5, Math.round(ry0) + 0.5, Math.round(rw), Math.round(rh));
 
     // 증발면 / 집전체 라벨
+    if (panelMinimal) return;
     ctx.fillStyle = INK + "0.85)"; ctx.font = "500 10px " + MONO;
     ctx.fillText("증발면 (표면)", rx0, ry0 - 8);
     ctx.fillStyle = CU + "1)";
@@ -1154,14 +1155,17 @@ const heroAB = (() => {
     if (t >= 42) { drying.reset(); dryingB.reset(); drying.set("t", 130); drying.set("p", 101); dryingB.set("t", 130); dryingB.set("p", 6); t = 0; }
   }
   function render() {
-    const top = VH * (VW <= 900 ? 0.56 : 0.30), hgt = VH * (VW <= 900 ? 0.40 : 0.62);
+    // 글자·숫자 영역과 겹치지 않도록 아래쪽 밴드에만, 좌우 각각 안쪽 여백을 두고 그린다
+    const top = VH * (VW <= 900 ? 0.56 : 0.60), band = VH * (VW <= 900 ? 0.38 : 0.34);
+    const pad = VW <= 900 ? 18 : 44, gut = VW <= 900 ? 18 : 60;
     const half = VW / 2;
-    panelOverride = { x: 0, y: top, w: half - 1, h: hgt }; drying.render();
-    panelOverride = { x: half + 1, y: top, w: half - 1, h: hgt }; dryingB.render();
-    panelOverride = null;
+    panelMinimal = true;
+    panelOverride = { x: pad, y: top, w: half - pad - gut / 2, h: band }; drying.render();
+    panelOverride = { x: half + gut / 2, y: top, w: half - pad - gut / 2, h: band }; dryingB.render();
+    panelOverride = null; panelMinimal = false;
     const g = ctx.createLinearGradient(0, 0, 0, VH);
-    g.addColorStop(0, "rgba(12,11,10,.94)"); g.addColorStop(.40, "rgba(12,11,10,.30)");
-    g.addColorStop(.72, "rgba(12,11,10,.44)"); g.addColorStop(1, "rgba(12,11,10,.90)");
+    g.addColorStop(0, "rgba(12,11,10,.96)"); g.addColorStop(.45, "rgba(12,11,10,.86)");
+    g.addColorStop(.50, "rgba(12,11,10,.30)"); g.addColorStop(1, "rgba(12,11,10,.88)");
     ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
   }
   function paint() {
@@ -1511,7 +1515,7 @@ function plotPanel(r, opt) {
 }
 
 // 장면 배치: 주 패널(좌) + 보조 패널(우)
-let panelOverride = null;
+let panelOverride = null, panelMinimal = false;
 function layoutPanels(mainRatio) {
   if (panelOverride) return { main: panelOverride, aux: null };
   if (VW <= 900) return { main: { x: world.x, y: world.y, w: world.w, h: world.h }, aux: null };
