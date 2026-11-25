@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>전극. — 2차전지 전극 공정 4단계 실시간 물리 시뮬레이션</title>
+<meta name="description" content="믹싱, 코팅, 건조, 압연. 2차전지 전극이 만들어지는 네 단계를 외부 라이브러리 없이 브라우저 실시간 물리 모델로 체험합니다.">
+<meta name="theme-color" content="#0b0b0a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b0b0a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23f4f2ec'/%3E%3Ccircle cx='16' cy='16' r='3.6' fill='%23ff5a1f'/%3E%3C/svg%3E">
+<style>
+  @font-face {
+    font-family: "PretendardSubset";
+    src: url("fonts/pretendard-subset.woff2") format("woff2");
+    font-weight: 45 920;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #0b0b0a;
+    --surface: #131311;
+    --surface-2: #1a1917;
+    --fg: #f4f2ec;
+    --fg-soft: #bcb7ae;
+    --mute: #827d75;
+    --line: rgba(244, 242, 236, 0.11);
+    --line-strong: rgba(244, 242, 236, 0.22);
+    --accent: #ff5a1f;
+    --accent-hi: #ff7a47;
+    --accent-soft: rgba(255, 90, 31, 0.15);
+    --pad: clamp(20px, 4.2vw, 52px);
+    --maxw: 1360px;
+    --font-sans: "PretendardSubset", "Pretendard", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --font-serif: Georgia, "Times New Roman", Times, serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html {
+    scroll-behavior: smooth;
+    background: var(--bg);
+    color: var(--fg);
+    overflow-x: clip;
+  }
+  body {
+    margin: 0;
+    min-height: 100svh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-weight: 420;
+    line-height: 1.55;
+    letter-spacing: -0.015em;
+    overflow-x: clip;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection { background: var(--accent); color: #160904; }
+  h1, h2, h3, p { margin: 0; }
+  button, input { font: inherit; color: inherit; }
+
+  /* ── Film Grain Overlay ── */
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    pointer-events: none;
+    opacity: 0.036;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ── Opening Glitch Shutter (2.5s Dramatic Impact) ── */
+  .shutter {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    background: var(--bg);
+    cursor: pointer;
+    transition: opacity 0.48s var(--ease), transform 0.55s var(--ease), visibility 0.55s;
+  }
+  .shutter.is-done {
+    opacity: 0;
+    transform: scale(1.03);
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .fx-glitch { position: relative; display: inline-block; }
+  .fx-glitch p {
+    font-size: clamp(28px, 4.8vw, 64px);
+    font-weight: 850;
+    line-height: 1.24;
+    letter-spacing: -0.035em;
+    text-align: center;
+  }
+  .fx-glitch em { font-style: normal; color: var(--accent); }
+  .g-layer { position: absolute; inset: 0; pointer-events: none; opacity: 0.7; }
+  .g-r { color: var(--accent); animation: gR 0.22s steps(2) infinite; }
+  .g-c { color: #6ae6ff; animation: gC 0.2s steps(2) infinite; }
+  .shutter-hint {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--mute);
+  }
+  @keyframes gR {
+    0% { transform: translate(-3px, 1px); clip-path: inset(10% 0 60% 0); }
+    50% { transform: translate(2px, -1px); clip-path: inset(48% 0 20% 0); }
+    100% { transform: translate(-2px, 0); clip-path: inset(72% 0 6% 0); }
+  }
+  @keyframes gC {
+    0% { transform: translate(3px, -1px); clip-path: inset(56% 0 12% 0); }
+    50% { transform: translate(-2px, 1px); clip-path: inset(16% 0 54% 0); }
+    100% { transform: translate(2px, 0); clip-path: inset(8% 0 70% 0); }
+  }
+
+  /* ── Floating Glass Pill Nav (Dynamic Active Scroll-Spy, Internal Anchors Only) ── */
+  .floating-nav {
+    position: fixed;
+    top: 46px;
+    left: 12px;
+    right: 12px;
+    z-index: 60;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    transition: top 0.35s var(--ease);
+  }
+  .floating-nav.is-scrolled { top: 14px; }
+  .glass-nav {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 100%;
+    padding: 5px;
+    border-radius: 999px;
+    background: rgba(24, 24, 22, 0.78);
+    border: 1px solid rgba(244, 242, 236, 0.18);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .glass-nav::-webkit-scrollbar { display: none; }
+  .glass-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg-soft);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.2s ease, background 0.22s var(--ease);
+  }
+  .glass-nav a:hover { color: var(--fg); background: rgba(244, 242, 236, 0.08); }
+  .glass-nav a.is-active {
+    background: var(--accent);
+    color: #160803;
+    font-weight: 800;
+  }
+
+  /* ── Exact Scroll Offset for All Sections ── */
+  [id] { scroll-margin-top: 84px; }
+  #hero { scroll-margin-top: 0; }
+
+  /* ── HERO SECTION ── */
+  .hero {
+    position: relative;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .hero-glow {
+    position: absolute;
+    left: 2%;
+    top: 10%;
+    width: 48vw;
+    height: 52vh;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 90, 31, 0.14), transparent 66%);
+    filter: blur(24px);
+  }
+  #cv-bars {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 36svh;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.92;
+  }
+  .bars-fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 38svh;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(180deg, var(--bg) 0%, rgba(11, 11, 10, 0.15) 45%, rgba(11, 11, 10, 0.45) 100%);
+  }
+  #cv-cell {
+    position: absolute;
+    right: -4%;
+    top: -4%;
+    width: 54vw;
+    height: 104svh;
+    z-index: 4;
+    pointer-events: none;
+  }
+  .hero-header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px var(--pad);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--mute);
+  }
+  .brand-word {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--font-sans);
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    color: var(--fg);
+  }
+  .brand-word .dot { color: var(--accent); }
+  .brand-word .tag {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mute);
+    letter-spacing: 0.06em;
+  }
+  .hero-body {
+    position: relative;
+    z-index: 10;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 40px var(--pad) 28px;
+    max-width: 980px;
+  }
+  .hero-eyebrow {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: clamp(14px, 2.2vh, 22px);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mute);
+    animation: fadeUp 0.75s var(--ease) 2.55s both;
+  }
+  .hero-eyebrow .by {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 14px;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--fg-soft);
+  }
+  .hero-eyebrow strong {
+    font-family: var(--font-sans);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: var(--fg);
+  }
+  .hero-wordmark {
+    font-size: clamp(92px, 17.5vw, 248px);
+    font-weight: 900;
+    line-height: 0.88;
+    letter-spacing: -0.055em;
+    color: var(--fg);
+    margin-left: -0.04em;
+    animation: dropIn 0.85s var(--ease) 2.42s both;
+  }
+  .hero-wordmark .period { color: var(--accent); }
+  .hero-sub {
+    margin-top: clamp(22px, 3.4vh, 36px);
+    font-size: clamp(24px, 3.3vw, 42px);
+    font-weight: 750;
+    line-height: 1.28;
+    letter-spacing: -0.03em;
+    color: var(--fg);
+    max-width: 24ch;
+    word-break: keep-all;
+    animation: fadeUp 0.8s var(--ease) 2.66s both;
+  }
+  .cycle-btn {
+    display: inline;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 850;
+    letter-spacing: inherit;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 90, 31, 0.38);
+    text-underline-offset: 6px;
+  }
+  .cycle-btn:hover { text-decoration-color: var(--accent); }
+  .hero-cta-row {
+    margin-top: clamp(24px, 3.4vh, 34px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px 24px;
+    animation: fadeUp 0.8s var(--ease) 2.76s both;
+  }
+  .cta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 17px 34px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #160803;
+    font-size: 18px;
+    font-weight: 800;
+    text-decoration: none;
+    transition: background 0.25s ease, transform 0.25s var(--ease);
+    animation: ctaPulse 3s ease-in-out infinite;
+  }
+  .cta-pill:hover { background: var(--fg); color: var(--bg); transform: translateY(-2px); }
+  .cta-pill .arr { transition: transform 0.25s var(--ease); }
+  .cta-pill:hover .arr { transform: translateX(4px); }
+  @keyframes ctaPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 31, 0.42); }
+    50% { box-shadow: 0 0 28px 3px rgba(255, 90, 31, 0.22); }
+  }
+  .hero-spec {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    color: var(--fg-soft);
+  }
+  .hero-live {
+    position: relative;
+    z-index: 10;
+    border-top: 1px solid var(--line);
+    padding: 14px var(--pad);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--fg);
+    background: rgba(11, 11, 10, 0.48);
+    backdrop-filter: blur(8px);
+  }
+  .live-left { display: inline-flex; align-items: center; gap: 10px; }
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(1.25); }
+  }
+  @keyframes dropIn {
+    from { opacity: 0; transform: translateY(34px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── SHARED SECTION BANDS ── */
+  .band {
+    position: relative;
+    z-index: 5;
+    padding: clamp(76px, 10vh, 132px) var(--pad);
+    border-top: 1px solid var(--line);
+  }
+  .band-inner {
+    width: 100%;
+    max-width: var(--maxw);
+    margin: 0 auto;
+  }
+  .sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: clamp(28px, 4.4vh, 48px);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+  .sec-head .idx {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 15px;
+    color: var(--accent);
+    margin-right: 10px;
+  }
+  .sec-head .year {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--accent);
+  }
+
+  /* ── SCREEN 2: STRIKE-THROUGH MANIFESTO ── */
+  .manifesto-title {
+    font-size: clamp(30px, 5.2vw, 76px);
+    font-weight: 900;
+    line-height: 1.18;
+    letter-spacing: -0.042em;
+    word-break: keep-all;
+  }
+  .strike-line {
+    position: relative;
+    display: inline-block;
+    color: #5b5750;
+  }
+  .strike-line::after {
+    content: "";
+    position: absolute;
+    left: -2%;
+    right: -2%;
+    top: 52%;
+    height: clamp(4px, 0.5vw, 7px);
+    border-radius: 99px;
+    background: var(--accent);
+    box-shadow: 0 0 22px rgba(255, 90, 31, 0.65);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.9s var(--ease);
+  }
+  .is-inview .strike-line::after,
+  html.instant .strike-line::after { transform: scaleX(1); }
+  .manifesto-copy {
+    margin-top: clamp(22px, 3.2vh, 34px);
+    max-width: 60ch;
+    font-size: clamp(16px, 1.45vw, 20px);
+    line-height: 1.65;
+    color: var(--fg-soft);
+    word-break: keep-all;
+  }
+  .manifesto-copy strong { color: var(--fg); font-weight: 700; }
+
+  /* ── SCREEN 2B: EQUAL-HIGHLIGHT 4-STAGE VISUAL DATA BENTO ── */
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(16px, 2vw, 24px);
+  }
+  .bento-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 18px;
+    padding: clamp(22px, 2.5vw, 34px);
+    border-radius: 18px;
+    background: linear-gradient(160deg, rgba(244, 242, 236, 0.036), rgba(244, 242, 236, 0.012));
+    border: 1px solid var(--line);
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    transition: border-color 0.25s ease, transform 0.3s var(--ease), background 0.25s ease;
+  }
+  .bento-card:hover {
+    border-color: rgba(255, 90, 31, 0.5);
+    transform: translateY(-4px);
+    background: linear-gradient(160deg, rgba(255, 90, 31, 0.075), rgba(20, 18, 16, 0.92));
+  }
+  .bento-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+  .bento-top .stage-tag { color: var(--accent-hi); font-weight: 700; }
+  .bento-mid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 0.85fr);
+    align-items: center;
+    gap: 18px;
+  }
+  .bento-num {
+    font-size: clamp(38px, 4.4vw, 64px);
+    font-weight: 900;
+    line-height: 0.96;
+    letter-spacing: -0.045em;
+    font-variant-numeric: tabular-nums;
+    color: var(--fg);
+  }
+  .bento-num .unit {
+    font-size: 0.4em;
+    font-weight: 700;
+    color: var(--fg-soft);
+    margin-left: 0.14em;
+  }
+  .bento-num .hi { color: var(--accent); }
+  .bento-desc {
+    margin-top: 10px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--fg-soft);
+    word-break: keep-all;
+  }
+  /* Visual Data Graphic Box inside each Bento Card */
+  .bento-viz {
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(11, 11, 10, 0.65);
+    border: 1px solid rgba(244, 242, 236, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .viz-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .viz-label b { color: var(--fg); font-weight: 700; }
+  .viz-label b.hot { color: var(--accent); }
+  .viz-svg { width: 100%; height: 54px; display: block; }
+  .mini-bar-row { display: flex; flex-direction: column; gap: 4px; }
+  .mini-track {
+    width: 100%;
+    height: 8px;
+    border-radius: 99px;
+    background: rgba(244, 242, 236, 0.08);
+    overflow: hidden;
+  }
+  .mini-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--fg);
+  }
+  .mini-fill.hot { background: linear-gradient(90deg, #ff5a1f, #ff8a54); }
+  .bento-foot {
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .bento-foot .go { color: var(--fg); transition: transform 0.2s var(--ease), color 0.2s ease; }
+  .bento-card:hover .bento-foot .go { transform: translateX(4px); color: var(--accent); }
+
+  /* ── INTERACTIVE PHYSICS STAGE SECTIONS (01 ~ 04) ── */
+  .stage-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+    gap: clamp(24px, 3.2vw, 48px);
+    align-items: start;
+  }
+  .stage-grid > * { min-width: 0; }
+  .stage-info {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .stage-title {
+    font-size: clamp(32px, 4.4vw, 60px);
+    font-weight: 900;
+    line-height: 1.04;
+    letter-spacing: -0.042em;
+    color: var(--fg);
+    word-break: keep-all;
+  }
+  .stage-title em { font-style: normal; color: var(--accent); }
+  .stage-copy {
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--fg-soft);
+    word-break: keep-all;
+  }
+
+  /* Live Visual Metric Gauges (Bars + Big Readouts) */
+  .gauge-list {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .gauge-item { display: flex; flex-direction: column; gap: 6px; }
+  .gauge-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .gauge-head strong {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .gauge-head strong.is-accent { color: var(--accent); }
+  .gauge-track {
+    position: relative;
+    width: 100%;
+    height: 8px;
+    border-radius: 99px;
+    background: rgba(244, 242, 236, 0.08);
+    overflow: hidden;
+  }
+  .gauge-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 99px;
+    background: var(--fg);
+    transition: width 0.14s linear, background 0.2s ease;
+  }
+  .gauge-fill.is-accent { background: linear-gradient(90deg, #ff5a1f, #ff8f5c); }
+
+  /* Controls Card */
+  .ctrl-box {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .ctrl-row { display: flex; flex-direction: column; gap: 7px; }
+  .ctrl-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 13px;
+    color: var(--fg-soft);
+  }
+  .ctrl-label b {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  input[type="range"] {
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pill-btn {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  .pill-btn:hover { background: rgba(244, 242, 236, 0.08); border-color: var(--fg); }
+  .pill-btn.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #160803;
+  }
+
+  /* Simulation Chamber Frame (Strictly Separated from Text, Generous Padding) */
+  .sim-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: clamp(14px, 1.8vw, 22px);
+    border-radius: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .sim-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .sim-bar .title { color: var(--fg); font-weight: 700; display: inline-flex; align-items: center; gap: 8px; }
+  .sim-canvas-box {
+    position: relative;
+    width: 100%;
+    height: clamp(280px, 40vh, 410px);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #090908;
+    border: 1px solid rgba(244, 242, 236, 0.09);
+  }
+  .sim-canvas-box canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .sim-canvas-box.is-interactive { cursor: grab; touch-action: pan-y; }
+  .sim-canvas-box.is-interactive:active { cursor: grabbing; }
+
+  /* Auxiliary Live Chart Strip (Separated by 14px Gutter Below Main Canvas) */
+  .sim-chart-box {
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #0d0d0c;
+    border: 1px solid rgba(244, 242, 236, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sim-chart-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .sim-chart-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+  .sim-chart-box canvas {
+    display: block;
+    width: 100%;
+    height: 82px;
+  }
+  .sim-hint {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--mute);
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--line);
+    padding: clamp(32px, 5vh, 52px) var(--pad);
+    background: #090908;
+  }
+  .foot-inner {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 24px;
+    font-size: 13px;
+    color: var(--mute);
+  }
+  .foot-inner .mono { font-family: var(--font-mono); font-size: 12px; color: var(--fg-soft); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 980px) {
+    .bento-grid { grid-template-columns: 1fr; }
+    .stage-grid { grid-template-columns: 1fr; }
+    #cv-cell {
+      width: 78vw;
+      height: 54svh;
+      right: -18%;
+      top: 6%;
+      opacity: 0.72;
+    }
+    .floating-nav { top: 54px; }
+    .hero-header .hide-md { display: none; }
+  }
+  @media (max-width: 620px) {
+    .floating-nav { top: 10px; left: 8px; right: 8px; }
+    .glass-nav a { padding: 7px 10px; font-size: 12px; }
+    .hero-header { padding-top: 62px; }
+    .hero-header .hide-sm { display: none; }
+    #cv-cell {
+      width: 88vw;
+      height: 44svh;
+      right: -24%;
+      top: 10%;
+      opacity: 0.62;
+    }
+    .hero-body { padding-top: 28px; justify-content: flex-end; padding-bottom: 40px; }
+    .hero-wordmark { font-size: clamp(78px, 24vw, 118px); }
+    .hero-sub { font-size: clamp(22px, 6.2vw, 30px); }
+    .cta-pill { padding: 14px 26px; font-size: 16px; }
+    .hero-live { flex-wrap: wrap; }
+    .bento-mid { grid-template-columns: 1fr; }
+    .sim-canvas-box { height: 260px; }
+  }
+
+  html.instant .shutter { display: none !important; }
+  html.instant .hero-wordmark,
+  html.instant .hero-eyebrow,
+  html.instant .hero-sub,
+  html.instant .hero-cta-row {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .shutter { display: none !important; }
+    .g-r, .g-c, .cta-pill, .live-dot,
+    .hero-wordmark, .hero-eyebrow, .hero-sub, .hero-cta-row { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- Opening Impact Glitch Shutter (2.5s) -->
+<div class="shutter" id="shutter" aria-hidden="true">
+  <div class="fx-glitch">
+    <p class="g-layer g-r">반죽에서 전극까지,<br><em>네 번의 물리.</em></p>
+    <p class="g-layer g-c">반죽에서 전극까지,<br><em>네 번의 물리.</em></p>
+    <p>반죽에서 전극까지,<br><em>네 번의 물리.</em></p>
+  </div>
+  <span class="shutter-hint">MIXING · COATING · DRYING · CALENDERING</span>
+</div>
+
+<!-- Floating Glass Pill Navigation (Balanced Scroll-Spy, Internal Anchors Only) -->
+<div class="floating-nav" id="floating-nav">
+  <nav class="glass-nav" id="glass-nav" aria-label="전극 공정 탐색">
+    <a href="#hero" data-nav="hero" class="is-active">개요</a>
+    <a href="#stage-mixing" data-nav="stage-mixing">01 믹싱</a>
+    <a href="#stage-coating" data-nav="stage-coating">02 코팅</a>
+    <a href="#stage-drying" data-nav="stage-drying">03 건조</a>
+    <a href="#stage-calendering" data-nav="stage-calendering">04 압연</a>
+  </nav>
+</div>
+
+<main>
+  <!-- SCREEN 1: HERO -->
+  <section id="hero" class="hero">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <canvas id="cv-bars" aria-hidden="true"></canvas>
+    <div class="bars-fade" aria-hidden="true"></div>
+    <canvas id="cv-cell" aria-hidden="true"></canvas>
+
+    <header class="hero-header">
+      <span class="brand-word">전극<span class="dot">.</span> <span class="tag">#01—04</span></span>
+      <span class="hide-md">믹싱 · 코팅 · 건조 · 압연 — 2차전지 전극 공정</span>
+      <span class="hide-sm" id="scramble-top">4 STAGES · REALTIME PHYSICS</span>
+    </header>
+
+    <div class="hero-body">
+      <p class="hero-eyebrow">
+        <span>2차전지 전극 제조 4단계</span>
+        <span class="by">by</span>
+        <strong>실시간 유체 · 확산 · 입자 엔진</strong>
+      </p>
+
+      <h1 class="hero-wordmark">전극<span class="period">.</span></h1>
+
+      <p class="hero-sub">
+        반죽이 배터리가 되는<br>
+        <button type="button" class="cycle-btn" id="cycle-btn" aria-label="공정 하이라이트 전환">네 번의 물리</button>를 계산합니다.
+      </p>
+
+      <div class="hero-cta-row">
+        <a href="#why-process" class="cta-pill">4단계 공정 보기 <span class="arr" aria-hidden="true">→</span></a>
+        <span class="hero-spec" id="scramble-spec">680 1/s · 152.9 µm · 6 kPa · 1.85 g/cc</span>
+      </div>
+    </div>
+
+    <div class="hero-live">
+      <span class="live-left">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span>01 믹싱 680 1/s · 02 코팅 152.9 µm · 03 건조 5.66→2.19× · 04 압연 1.85 g/cc</span>
+      </span>
+      <span class="hide-sm" style="color:var(--mute)">ZERO EXTERNAL LIBRARIES</span>
+    </div>
+  </section>
+
+  <!-- SCREEN 2: FULL-PROCESS MANIFESTO + VISUAL DATA BENTO -->
+  <section id="why-process" class="band" data-reveal>
+    <div class="band-inner">
+      <div class="sec-head">
+        <span><span class="idx">00</span>WHY ELECTRODE PROCESS</span>
+        <span class="year">&apos;26</span>
+      </div>
+      <h2 class="manifesto-title">
+        <span class="strike-line">배터리는 조립에서 결정된다.</span><br>
+        <span>품질은 네 단계 전극 공정에서 갈린다.</span>
+      </h2>
+      <p class="manifesto-copy">
+        활물질을 <strong>섞고(믹싱)</strong>, 집전체에 <strong>바르고(코팅)</strong>, 용매를 <strong>말리고(건조)</strong>, 롤로 <strong>누릅니다(압연)</strong>.
+        어느 한 단계라도 균일함이 무너지면 수명과 안전성이 떨어집니다. 아래 네 장면의 모든 수치는 브라우저가 직접 계산한 결과입니다.
+      </p>
+    </div>
+  </section>
+
+  <section id="overview-numbers" class="band" style="padding-top: clamp(24px, 4vh, 48px); border-top: 0;">
+    <div class="band-inner">
+      <div class="sec-head">
+        <span><span class="idx">01—04</span>PROCESS METRICS — 전 공정 핵심 지표</span>
+        <span>CLICK CARD TO JUMP</span>
+      </div>
+
+      <div class="bento-grid">
+        <!-- Card 01: MIXING -->
+        <a href="#stage-mixing" class="bento-card">
+          <div class="bento-top">
+            <span class="stage-tag">01 · MIXING</span>
+            <span>NAVIER-STOKES 2D</span>
+          </div>
+          <div class="bento-mid">
+            <div>
+              <p class="bento-num">680<span class="unit">1/s</span></p>
+              <p class="bento-desc">최대 전단 속도. 편심 교반으로 입자 26,000개의 불균일 지수를 1.80에서 낮춥니다.</p>
+            </div>
+            <div class="bento-viz" aria-hidden="true">
+              <div class="viz-label"><span>불균일 지수</span><b class="hot">1.80 → 0.2</b></div>
+              <svg class="viz-svg" viewBox="0 0 180 54" fill="none">
+                <path d="M4 10 C 36 12, 56 38, 176 46" stroke="#ff5a1f" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M4 10 C 36 12, 56 38, 176 46 L 176 52 L 4 52 Z" fill="rgba(255,90,31,0.14)"/>
+                <circle cx="4" cy="10" r="3" fill="#ff5a1f"/>
+                <circle cx="176" cy="46" r="3" fill="#f4f2ec"/>
+              </svg>
+            </div>
+          </div>
+          <div class="bento-foot">
+            <span>실시간 유체 교반 시뮬레이션</span>
+            <span class="go">01 믹싱 이동 →</span>
+          </div>
+        </a>
+
+        <!-- Card 02: COATING -->
+        <a href="#stage-coating" class="bento-card">
+          <div class="bento-top">
+            <span class="stage-tag">02 · COATING</span>
+            <span>SLOT-DIE SHEAR</span>
+          </div>
+          <div class="bento-mid">
+            <div>
+              <p class="bento-num">152.9<span class="unit">µm</span></p>
+              <p class="bento-desc">웨트 도포 두께. 다이 틈새 112 µm와 라인 속도가 편차 23.3%를 좌우합니다.</p>
+            </div>
+            <div class="bento-viz" aria-hidden="true">
+              <div class="viz-label"><span>웨트 프로파일</span><b>±23.3%</b></div>
+              <svg class="viz-svg" viewBox="0 0 180 54" fill="none">
+                <rect x="0" y="18" width="180" height="18" fill="rgba(244,242,236,0.06)"/>
+                <line x1="0" y1="27" x2="180" y2="27" stroke="rgba(244,242,236,0.3)" stroke-dasharray="4 4"/>
+                <path d="M4 32 Q 28 16, 52 26 T 104 24 T 152 29 T 176 22" stroke="#f4f2ec" stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M4 46 L 176 46" stroke="#c87137" stroke-width="3"/>
+              </svg>
+            </div>
+          </div>
+          <div class="bento-foot">
+            <span>슬롯다이 두께·속도 제어</span>
+            <span class="go">02 코팅 이동 →</span>
+          </div>
+        </a>
+
+        <!-- Card 03: DRYING -->
+        <a href="#stage-drying" class="bento-card">
+          <div class="bento-top">
+            <span class="stage-tag">03 · DRYING</span>
+            <span>SOLVENT PDE · 6 kPa</span>
+          </div>
+          <div class="bento-mid">
+            <div>
+              <p class="bento-num"><span class="hi">5.66</span><span class="unit">→</span>2.19<span class="unit">×</span></p>
+              <p class="bento-desc">30초 표면 바인더 편중. 온도 대신 압력을 6 kPa로 낮춰 편중을 61% 줄입니다.</p>
+            </div>
+            <div class="bento-viz" aria-hidden="true">
+              <div class="mini-bar-row">
+                <div class="viz-label"><span>대기압 130°C</span><b class="hot">5.66×</b></div>
+                <div class="mini-track"><div class="mini-fill hot" style="width:94%"></div></div>
+              </div>
+              <div class="mini-bar-row">
+                <div class="viz-label"><span>진공 6 kPa</span><b>2.19×</b></div>
+                <div class="mini-track"><div class="mini-fill" style="width:36%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="bento-foot">
+            <span>대기압 vs 진공 건조 체험</span>
+            <span class="go">03 건조 이동 →</span>
+          </div>
+        </a>
+
+        <!-- Card 04: CALENDERING -->
+        <a href="#stage-calendering" class="bento-card">
+          <div class="bento-top">
+            <span class="stage-tag">04 · CALENDERING</span>
+            <span>ROLL COMPACTION</span>
+          </div>
+          <div class="bento-mid">
+            <div>
+              <p class="bento-num">1.85<span class="unit">g/cc</span></p>
+              <p class="bento-desc">100 → 62 µm 압축 밀도. 공극률은 58 → 36%로 줄고 과압 시 파쇄 위험 53%.</p>
+            </div>
+            <div class="bento-viz" aria-hidden="true">
+              <div class="mini-bar-row">
+                <div class="viz-label"><span>전극 밀도</span><b>1.85 g/cc</b></div>
+                <div class="mini-track"><div class="mini-fill" style="width:78%"></div></div>
+              </div>
+              <div class="mini-bar-row">
+                <div class="viz-label"><span>파쇄 위험</span><b class="hot">53%</b></div>
+                <div class="mini-track"><div class="mini-fill hot" style="width:53%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="bento-foot">
+            <span>롤 간격 압축 시뮬레이션</span>
+            <span class="go">04 압연 이동 →</span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       STAGE 01: MIXING (Navier-Stokes 2D + 26,000 Particles)
+       ═══════════════════════════════════════════════════════════ -->
+  <section id="stage-mixing" class="band" data-stage="mixing">
+    <div class="band-inner">
+      <div class="sec-head">
+        <span><span class="idx">01 / 04</span>MIXING — 슬러리 교반</span>
+        <span>INCOMPRESSIBLE FLUID · JACOBI 12</span>
+      </div>
+
+      <div class="stage-grid">
+        <div class="stage-info">
+          <h2 class="stage-title">뭉친 반죽을<br><em>고르게</em> 섞는다</h2>
+          <p class="stage-copy">
+            활물질·도전재·바인더·용매를 한 탱크에서 교반합니다.
+            편심 임펠러가 만든 전단 유동이 고형분 덩어리를 찢고 분산시킵니다.
+            오른쪽 탱크 위에서 직접 드래그해 반죽을 저어볼 수 있습니다.
+          </p>
+
+          <div class="gauge-list">
+            <div class="gauge-item">
+              <div class="gauge-head"><span>혼합 균일도</span><strong id="m-uni-val">0%</strong></div>
+              <div class="gauge-track"><div class="gauge-fill is-accent" id="m-uni-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>최대 전단 속도</span><strong id="m-shear-val">0 1/s</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="m-shear-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>불균일 지수 (CV)</span><strong id="m-cv-val">1.80</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="m-cv-bar"></div></div>
+            </div>
+          </div>
+
+          <div class="ctrl-box">
+            <div class="ctrl-row">
+              <label class="ctrl-label" for="m-rpm">임펠러 교반 세기 <b id="m-rpm-v">100%</b></label>
+              <input id="m-rpm" type="range" min="30" max="180" step="10" value="100">
+            </div>
+            <div class="preset-row">
+              <button type="button" class="pill-btn" id="m-reset">덩어리 초기화 ↻</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sim-panel">
+          <div class="sim-bar">
+            <span class="title"><span class="live-dot" aria-hidden="true"></span>SLURRY TANK · 단면</span>
+            <span id="m-part-label">26,000 PARTICLES</span>
+          </div>
+          <div class="sim-canvas-box is-interactive">
+            <canvas id="cv-mixing" aria-label="슬러리 믹싱 실시간 유체 시뮬레이션"></canvas>
+          </div>
+          <div class="sim-chart-box">
+            <div class="sim-chart-head">
+              <span>실시간 혼합 균일도 추이 (0 → 100%)</span>
+              <span class="sim-chart-legend"><span><i class="legend-dot" style="background:var(--accent)"></i>균일도</span></span>
+            </div>
+            <canvas id="cv-mixing-chart" aria-hidden="true"></canvas>
+          </div>
+          <p class="sim-hint">탱크 내부를 마우스·터치로 드래그하면 추가 전단력이 즉시 유체에 반영됩니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       STAGE 02: COATING (Slot-Die Shear Flow)
+       ═══════════════════════════════════════════════════════════ -->
+  <section id="stage-coating" class="band" data-stage="coating">
+    <div class="band-inner">
+      <div class="sec-head">
+        <span><span class="idx">02 / 04</span>COATING — 슬롯다이 도포</span>
+        <span>SHEAR FLOW ON Cu FOIL</span>
+      </div>
+
+      <div class="stage-grid">
+        <div class="stage-info">
+          <h2 class="stage-title">집전체 위에<br><em>얇고 고르게</em> 바른다</h2>
+          <p class="stage-copy">
+            섞인 슬러리를 구리박(Cu foil) 위에 100~200 µm 두께로 도포합니다.
+            블레이드 틈새와 라인 속도의 균형이 어긋나면 두께 편차가 커지고 줄무늬 결함이 생깁니다.
+          </p>
+
+          <div class="gauge-list">
+            <div class="gauge-item">
+              <div class="gauge-head"><span>웨트 코팅 두께</span><strong id="c-th-val" class="is-accent">— µm</strong></div>
+              <div class="gauge-track"><div class="gauge-fill is-accent" id="c-th-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>두께 편차 (CV)</span><strong id="c-cv-val">— %</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="c-cv-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>기판 도포율</span><strong id="c-len-val">— %</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="c-len-bar"></div></div>
+            </div>
+          </div>
+
+          <div class="ctrl-box">
+            <div class="ctrl-row">
+              <label class="ctrl-label" for="c-gap">슬롯다이 틈새 <b id="c-gap-v">112 µm</b></label>
+              <input id="c-gap" type="range" min="8" max="28" step="1" value="14">
+            </div>
+            <div class="ctrl-row">
+              <label class="ctrl-label" for="c-spd">라인 속도 <b id="c-spd-v">18 m/min</b></label>
+              <input id="c-spd" type="range" min="6" max="54" step="2" value="18">
+            </div>
+          </div>
+        </div>
+
+        <div class="sim-panel">
+          <div class="sim-bar">
+            <span class="title"><span class="live-dot" aria-hidden="true"></span>SLOT-DIE COATING · 단면</span>
+            <span>WET FILM ON Cu FOIL</span>
+          </div>
+          <div class="sim-canvas-box">
+            <canvas id="cv-coating" aria-label="슬롯다이 코팅 실시간 유동 시뮬레이션"></canvas>
+          </div>
+          <div class="sim-chart-box">
+            <div class="sim-chart-head">
+              <span>길이 방향 실시간 웨트 두께 프로파일 (µm)</span>
+              <span class="sim-chart-legend">
+                <span><i class="legend-dot" style="background:var(--fg)"></i>웨트 두께</span>
+                <span><i class="legend-dot" style="background:var(--accent)"></i>평균선</span>
+              </span>
+            </div>
+            <canvas id="cv-coating-chart" aria-hidden="true"></canvas>
+          </div>
+          <p class="sim-hint">라인 속도를 높이고 틈새를 조절해 두께 편차 변화를 확인해 보세요.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       STAGE 03: DRYING (Solvent Diffusion + Binder Advection PDE)
+       ═══════════════════════════════════════════════════════════ -->
+  <section id="stage-drying" class="band" data-stage="drying">
+    <div class="band-inner">
+      <div class="sec-head">
+        <span><span class="idx">03 / 04</span>DRYING — 용매 증발과 바인더 이동</span>
+        <span>DIFFUSION · ADVECTION PDE</span>
+      </div>
+
+      <div class="stage-grid">
+        <div class="stage-info">
+          <h2 class="stage-title">온도 대신<br><em>압력</em>을 낮춘다</h2>
+          <p class="stage-copy">
+            겉면이 급하게 마르면 내부 용매가 빠져나오며 바인더를 표면으로 끌고 올라갑니다.
+            대기압 130°C에서는 표면 바인더가 5.66배까지 쏠리지만, 압력을 6 kPa로 낮추면 2.19배로 고르게 마릅니다.
+          </p>
+
+          <div class="gauge-list">
+            <div class="gauge-item">
+              <div class="gauge-head"><span>표면 바인더 편중</span><strong id="d-mig-val" class="is-accent">1.00×</strong></div>
+              <div class="gauge-track"><div class="gauge-fill is-accent" id="d-mig-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>건조 진행률</span><strong id="d-prog-val">0.0%</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="d-prog-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>잔류 용매</span><strong id="d-res-val">100.0%</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="d-res-bar"></div></div>
+            </div>
+          </div>
+
+          <div class="ctrl-box">
+            <div class="preset-row">
+              <button type="button" class="pill-btn is-active" id="d-preset-atm">대기압 101 kPa · 130°C</button>
+              <button type="button" class="pill-btn" id="d-preset-vac">진공 6 kPa · 80°C</button>
+              <button type="button" class="pill-btn" id="d-reset">0초부터 다시 ↻</button>
+            </div>
+            <div class="ctrl-row">
+              <label class="ctrl-label" for="d-temp">드라이어 온도 <b id="d-temp-v">130 °C</b></label>
+              <input id="d-temp" type="range" min="60" max="150" step="5" value="130">
+            </div>
+            <div class="ctrl-row">
+              <label class="ctrl-label" for="d-press">챔버 압력 <b id="d-press-v">101 kPa</b></label>
+              <input id="d-press" type="range" min="5" max="101" step="1" value="101">
+            </div>
+          </div>
+        </div>
+
+        <div class="sim-panel">
+          <div class="sim-bar">
+            <span class="title"><span class="live-dot" aria-hidden="true"></span>DRYING CHAMBER · 깊이 단면 (100 µm)</span>
+            <span id="d-time-label">경과 0.0 s</span>
+          </div>
+          <div class="sim-canvas-box">
+            <canvas id="cv-drying" aria-label="전극 건조 용매 확산 및 바인더 이동 시뮬레이션"></canvas>
+          </div>
+          <div class="sim-chart-box">
+            <div class="sim-chart-head">
+              <span>깊이별 농도 분포 (좌: 증발면 → 우: Cu 집전체)</span>
+              <span class="sim-chart-legend">
+                <span><i class="legend-dot" style="background:var(--fg)"></i>용매</span>
+                <span><i class="legend-dot" style="background:var(--accent)"></i>바인더</span>
+              </span>
+            </div>
+            <canvas id="cv-drying-chart" aria-hidden="true"></canvas>
+          </div>
+          <p class="sim-hint">프리셋 버튼으로 대기압(101 kPa)과 진공(6 kPa)의 표면 바인더 쏠림 차이를 바로 비교하세요.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       STAGE 04: CALENDERING (Roll Compaction)
+       ═══════════════════════════════════════════════════════════ -->
+  <section id="stage-calendering" class="band" data-stage="calendering">
+    <div class="band-inner">
+      <div class="sec-head">
+        <span><span class="idx">04 / 04</span>CALENDERING — 롤 압연</span>
+        <span>PARTICLE CONTACT COMPACTION</span>
+      </div>
+
+      <div class="stage-grid">
+        <div class="stage-info">
+          <h2 class="stage-title">눌러서<br><em>밀도</em>를 올린다</h2>
+          <p class="stage-copy">
+            마른 전극을 두 스틸 롤 사이로 통과시켜 입자 간 접촉을 높이고 에너지 밀도를 끌어올립니다.
+            다만 30%를 넘어 과도하게 누르면 활물질 입자가 파쇄되고 리튬 이온 통로(공극)가 막힙니다.
+          </p>
+
+          <div class="gauge-list">
+            <div class="gauge-item">
+              <div class="gauge-head"><span>전극 밀도</span><strong id="k-den-val">1.15 g/cc</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="k-den-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>공극률 (Porosity)</span><strong id="k-por-val">58.0%</strong></div>
+              <div class="gauge-track"><div class="gauge-fill" id="k-por-bar"></div></div>
+            </div>
+            <div class="gauge-item">
+              <div class="gauge-head"><span>입자 파쇄 위험</span><strong id="k-crush-val" class="is-accent">0%</strong></div>
+              <div class="gauge-track"><div class="gauge-fill is-accent" id="k-crush-bar"></div></div>
+            </div>
+          </div>
+
+          <div class="ctrl-box">
+            <div class="ctrl-row">
+              <label class="ctrl-label" for="k-gap">롤 간격 (목표 두께) <b id="k-gap-v">76 µm</b></label>
+              <input id="k-gap" type="range" min="58" max="105" step="1" value="76">
+            </div>
+            <div class="preset-row">
+              <button type="button" class="pill-btn" id="k-p-100">압연 전 (100 µm)</button>
+              <button type="button" class="pill-btn is-active" id="k-p-76">적정 (76 µm)</button>
+              <button type="button" class="pill-btn" id="k-p-62">고압 (62 µm · 위험)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sim-panel">
+          <div class="sim-bar">
+            <span class="title"><span class="live-dot" aria-hidden="true"></span>TWIN ROLL PRESS · 입자 단면</span>
+            <span id="k-th-label">두께 76.0 µm</span>
+          </div>
+          <div class="sim-canvas-box">
+            <canvas id="cv-calendering" aria-label="전극 롤 압연 입자 압축 시뮬레이션"></canvas>
+          </div>
+          <div class="sim-chart-box">
+            <div class="sim-chart-head">
+              <span>압축률 대비 밀도 · 파쇄 위험 트레이드오프</span>
+              <span class="sim-chart-legend">
+                <span><i class="legend-dot" style="background:var(--fg)"></i>밀도</span>
+                <span><i class="legend-dot" style="background:var(--accent)"></i>파쇄 위험</span>
+              </span>
+            </div>
+            <canvas id="cv-calendering-chart" aria-hidden="true"></canvas>
+          </div>
+          <p class="sim-hint">롤 간격을 70 µm 아래로 내리면 입자 접촉 응력이 높아져 주황색 파쇄 위험 영역에 진입합니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="foot-inner">
+      <p>© 2026 · 제1회 해커톤: 랜딩톤 출품작 · 유체(Navier-Stokes)·용매 확산 PDE·입자 압축 모델 외부 라이브러리 없이 직접 구현 · 서체 Pretendard (SIL OFL 1.1)</p>
+      <span class="mono">01 MIXING · 02 COATING · 03 DRYING · 04 CALENDERING</span>
+    </div>
+  </footer>
+</main>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const skipIntro = new URLSearchParams(location.search).has("skipIntro");
+
+  /* ── 0. Opening Shutter (2.5s Dramatic Glitch, Click to Skip) ── */
+  const shutter = $("shutter");
+  if (skipIntro) document.documentElement.classList.add("instant");
+  const GLYPHS = "0123456789ABCDEF#µkPa×·";
+  function scramble(el, finalText, duration = 900) {
+    if (!el || reduce || skipIntro) return;
+    const start = performance.now();
+    function step(now) {
+      const p = Math.min(1, (now - start) / duration);
+      let out = "";
+      for (let i = 0; i < finalText.length; i++) {
+        const ch = finalText[i];
+        if (ch === " " || ch === "·") { out += ch; continue; }
+        out += i / finalText.length < p ? ch : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+      }
+      el.textContent = out;
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function closeShutter() {
+    if (!shutter || shutter.classList.contains("is-done")) return;
+    shutter.classList.add("is-done");
+    scramble($("scramble-top"), "4 STAGES · REALTIME PHYSICS", 900);
+    scramble($("scramble-spec"), "680 1/s · 152.9 µm · 6 kPa · 1.85 g/cc", 1000);
+  }
+  if (shutter) {
+    if (reduce || skipIntro) shutter.classList.add("is-done");
+    else {
+      const tShutter = setTimeout(closeShutter, 2500);
+      shutter.addEventListener("click", () => {
+        clearTimeout(tShutter);
+        document.documentElement.classList.add("instant");
+        closeShutter();
+      }, { once: true });
+    }
+  }
+
+  /* ── 1. Exact Navigation Scroll & Scroll-Spy ── */
+  const fnav = $("floating-nav");
+  const navLinks = [...document.querySelectorAll("#glass-nav a[data-nav]")];
+  const spySections = ["hero", "stage-mixing", "stage-coating", "stage-drying", "stage-calendering"]
+    .map((id) => $(id)).filter(Boolean);
+
+  function setActiveNav(id) {
+    navLinks.forEach((a) => a.classList.toggle("is-active", a.dataset.nav === id));
+  }
+
+  // Exact offset scrolling on click (prevents floating nav overlap)
+  document.querySelectorAll('a[href^="#"]').forEach((link) => {
+    link.addEventListener("click", (e) => {
+      const targetId = link.getAttribute("href").slice(1);
+      const target = $(targetId);
+      if (!target) return;
+      e.preventDefault();
+      const offset = targetId === "hero" ? 0 : 78;
+      const top = Math.max(0, target.getBoundingClientRect().top + scrollY - offset);
+      window.scrollTo({ top, behavior: reduce ? "auto" : "smooth" });
+      if (spySections.some((s) => s.id === targetId)) setActiveNav(targetId);
+    });
+  });
+
+  function updateScrollSpy() {
+    fnav?.classList.toggle("is-scrolled", scrollY > 36);
+    const probeY = scrollY + innerHeight * 0.34;
+    let activeId = "hero";
+    for (const sec of spySections) {
+      if (sec.offsetTop <= probeY) activeId = sec.id;
+    }
+    setActiveNav(activeId);
+  }
+  addEventListener("scroll", updateScrollSpy, { passive: true });
+  updateScrollSpy();
+
+  /* ── Scroll Reveal + Visibility Tracking (60fps Performance) ── */
+  const visible = { hero: true, mixing: false, coating: false, drying: false, calendering: false };
+  if ("IntersectionObserver" in window) {
+    const revIO = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) { e.target.classList.add("is-inview"); revIO.unobserve(e.target); }
+      }
+    }, { threshold: 0.22 });
+    document.querySelectorAll("[data-reveal]").forEach((el) => revIO.observe(el));
+
+    const visIO = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const key = e.target.id === "hero" ? "hero" : e.target.dataset.stage;
+        if (key) visible[key] = e.isIntersecting;
+      }
+    }, { rootMargin: "120px 0px" });
+    visIO.observe($("hero"));
+    document.querySelectorAll("[data-stage]").forEach((el) => visIO.observe(el));
+  } else {
+    Object.keys(visible).forEach((k) => (visible[k] = true));
+  }
+
+  /* ── Hero Cycling Keyword ── */
+  const phrases = ["네 번의 물리", "01 믹싱 · 교반", "02 코팅 · 슬롯다이", "03 건조 · 6 kPa 진공", "04 압연 · 고밀도 압축"];
+  let pIdx = 0;
+  $("cycle-btn")?.addEventListener("click", (e) => {
+    pIdx = (pIdx + 1) % phrases.length;
+    e.currentTarget.textContent = phrases[pIdx];
+  });
+
+  /* ── Mouse Parallax ── */
+  let mx = 0.5, my = 0.5, smx = 0.5, smy = 0.5;
+  addEventListener("pointermove", (e) => {
+    mx = e.clientX / Math.max(1, innerWidth);
+    my = e.clientY / Math.max(1, innerHeight);
+  }, { passive: true });
+
+  /* ── Canvas DPR Sizing Helper ── */
+  function prepCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr; canvas.height = h * dpr;
+    }
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     HERO VISUALS: SPECTRUM BARS + 3D 4680 BATTERY CELL
+     ══════════════════════════════════════════════════════════ */
+  const cvBars = $("cv-bars");
+  const cvCell = $("cv-cell");
+
+  function drawBars(t) {
+    const { ctx, w, h } = prepCanvas(cvBars);
+    ctx.clearRect(0, 0, w, h);
+    const count = w < 640 ? 38 : 74;
+    const gap = w / count;
+    const barW = Math.max(3, gap * 0.46);
+    for (let i = 0; i < count; i++) {
+      const u = i / (count - 1);
+      const wave = 0.34 + 0.26 * Math.sin(u * 13 + t * 1.45) + 0.20 * Math.cos(u * 27 - t * 2.1 + i * 0.35) + 0.16 * Math.sin(u * 7.5 + t * 0.85);
+      const boost = Math.max(0, 1 - Math.abs(u - smx) * 4.5) * 0.28;
+      const amp = clamp(wave + boost, 0.08, 0.96);
+      const bh = amp * h * 0.92;
+      const x = i * gap + (gap - barW) * 0.5, y = h - bh;
+      const grad = ctx.createLinearGradient(0, y, 0, h);
+      grad.addColorStop(0, "rgba(255, 110, 42, 0.95)");
+      grad.addColorStop(0.55, "rgba(220, 68, 18, 0.52)");
+      grad.addColorStop(1, "rgba(120, 32, 8, 0.08)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, barW, bh);
+      ctx.fillStyle = "rgba(255, 180, 120, 0.65)";
+      ctx.fillRect(x, y, barW, 2);
+    }
+  }
+
+  function drawCell(t) {
+    const { ctx, w, h } = prepCanvas(cvCell);
+    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    const floatY = Math.sin(t * 1.15) * 12;
+    const tilt = -0.34 + (smx - 0.5) * 0.08;
+    ctx.translate(w * 0.55 + (smx - 0.5) * 16, h * 0.50 + floatY + (smy - 0.5) * 12);
+    ctx.rotate(tilt);
+
+    const R = Math.min(w, h) * 0.24, L = R * 3.35, capH = R * 0.28;
+    const topY = -L * 0.48, botY = L * 0.48, splitY = L * 0.08;
+    const shift = Math.sin(t * 0.65) * 0.045 + (smx - 0.5) * 0.07;
+
+    const glow = ctx.createRadialGradient(0, L * 0.05, R * 0.2, 0, L * 0.05, R * 2.4);
+    glow.addColorStop(0, "rgba(255, 90, 31, 0.20)");
+    glow.addColorStop(1, "rgba(255, 90, 31, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, L * 0.05, R * 2.4, 0, Math.PI * 2); ctx.fill();
+
+    function pathCyl(y1, y2) {
+      ctx.beginPath();
+      ctx.moveTo(-R, y1); ctx.lineTo(-R, y2);
+      ctx.ellipse(0, y2, R, capH, 0, Math.PI, 0, true);
+      ctx.lineTo(R, y1);
+      ctx.ellipse(0, y1, R, capH, 0, 0, Math.PI, false);
+      ctx.closePath();
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(0, topY, R, capH, 0, Math.PI, Math.PI * 2);
+    ctx.lineTo(R, botY);
+    ctx.ellipse(0, botY, R, capH, 0, 0, Math.PI);
+    ctx.closePath();
+    ctx.clip();
+
+    const chromeGrad = ctx.createLinearGradient(-R, 0, R, 0);
+    chromeGrad.addColorStop(0.00, "#1c1c1b");
+    chromeGrad.addColorStop(Math.max(0.06, 0.14 + shift), "#7e7e7b");
+    chromeGrad.addColorStop(Math.max(0.14, 0.28 + shift), "#f5f4f0");
+    chromeGrad.addColorStop(Math.max(0.28, 0.44 + shift), "#6b6b68");
+    chromeGrad.addColorStop(Math.max(0.48, 0.64 + shift), "#d6d6d2");
+    chromeGrad.addColorStop(Math.min(0.90, 0.80 + shift), "#ffffff");
+    chromeGrad.addColorStop(0.93, "#50504e");
+    chromeGrad.addColorStop(1.00, "#171716");
+    ctx.fillStyle = chromeGrad;
+    ctx.fillRect(-R - 4, topY - capH - 4, R * 2 + 8, L + capH * 2 + 8);
+
+    ctx.save();
+    ctx.filter = "blur(14px)";
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.beginPath(); ctx.roundRect(-R * 0.44 + shift * R, topY + L * 0.08, R * 0.28, L * 0.36, 18); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.42)";
+    ctx.beginPath(); ctx.roundRect(R * 0.28 + shift * R * 0.8, topY + L * 0.12, R * 0.2, L * 0.3, 14); ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = "rgba(20,20,19,0.42)";
+    ctx.font = `700 ${Math.round(R * 0.14)}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.textAlign = "center";
+    ctx.fillText("4680 · Li-ion", 0, topY + L * 0.34);
+    ctx.font = `500 ${Math.round(R * 0.095)}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.fillStyle = "rgba(20,20,19,0.34)";
+    ctx.fillText("ELECTRODE PROCESS", 0, topY + L * 0.41);
+    ctx.restore();
+
+    ctx.save();
+    pathCyl(splitY, botY);
+    ctx.clip();
+    const orangeGrad = ctx.createLinearGradient(-R, 0, R, 0);
+    orangeGrad.addColorStop(0, "#6e1c04"); orangeGrad.addColorStop(0.18, "#d94512");
+    orangeGrad.addColorStop(0.36, "#ff7d45"); orangeGrad.addColorStop(0.60, "#ff5a1f");
+    orangeGrad.addColorStop(0.84, "#b83107"); orangeGrad.addColorStop(1, "#4f1303");
+    ctx.fillStyle = orangeGrad;
+    ctx.fillRect(-R - 4, splitY - capH - 4, R * 2 + 8, botY - splitY + capH * 2 + 8);
+    ctx.restore();
+
+    ctx.strokeStyle = "rgba(25,10,4,0.5)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, splitY, R, capH, 0, 0, Math.PI); ctx.stroke();
+
+    const glint = ctx.createRadialGradient(-R * 0.34, splitY - R * 0.16, 2, -R * 0.34, splitY - R * 0.16, R * 0.32);
+    glint.addColorStop(0, "rgba(255,245,232,0.92)");
+    glint.addColorStop(0.35, "rgba(255,120,50,0.45)");
+    glint.addColorStop(1, "rgba(255,90,31,0)");
+    ctx.fillStyle = glint;
+    ctx.beginPath(); ctx.arc(-R * 0.34, splitY - R * 0.16, R * 0.32, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = "rgba(18,18,17,0.55)"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(0, topY + R * 0.22, R * 1.01, capH, 0, 0, Math.PI); ctx.stroke();
+    ctx.restore();
+
+    const shoulderGrad = ctx.createLinearGradient(-R, topY, R, topY);
+    shoulderGrad.addColorStop(0, "#3b3b39"); shoulderGrad.addColorStop(0.32, "#e8e7e2");
+    shoulderGrad.addColorStop(0.68, "#8c8c88"); shoulderGrad.addColorStop(1, "#2a2a28");
+    ctx.fillStyle = shoulderGrad;
+    ctx.beginPath(); ctx.ellipse(0, topY, R, capH, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = "#161614";
+    ctx.beginPath(); ctx.ellipse(0, topY, R * 0.78, capH * 0.78, 0, 0, Math.PI * 2); ctx.fill();
+
+    const capR = R * 0.42, capEllH = capH * 0.44, capLift = R * 0.19;
+    const wallGrad = ctx.createLinearGradient(-capR, 0, capR, 0);
+    wallGrad.addColorStop(0, "#383836"); wallGrad.addColorStop(0.28, "#f0efeb");
+    wallGrad.addColorStop(0.62, "#787875"); wallGrad.addColorStop(1, "#262624");
+    ctx.fillStyle = wallGrad;
+    ctx.beginPath();
+    ctx.moveTo(-capR, topY - capLift); ctx.lineTo(-capR, topY);
+    ctx.ellipse(0, topY, capR, capEllH, 0, Math.PI, 0, true);
+    ctx.lineTo(capR, topY - capLift); ctx.closePath(); ctx.fill();
+
+    const topDiscGrad = ctx.createLinearGradient(-capR, topY - capLift - capEllH, capR, topY - capLift + capEllH);
+    topDiscGrad.addColorStop(0, "#b8b8b4"); topDiscGrad.addColorStop(0.45, "#ffffff"); topDiscGrad.addColorStop(1, "#82827e");
+    ctx.fillStyle = topDiscGrad;
+    ctx.beginPath(); ctx.ellipse(0, topY - capLift, capR, capEllH, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = "rgba(24,24,22,0.42)"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-capR * 0.24, topY - capLift); ctx.lineTo(capR * 0.24, topY - capLift);
+    ctx.moveTo(0, topY - capLift - capEllH * 0.42); ctx.lineTo(0, topY - capLift + capEllH * 0.42);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.20)"; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(0, topY, R, capH, 0, Math.PI, Math.PI * 2);
+    ctx.lineTo(R, botY);
+    ctx.ellipse(0, botY, R, capH, 0, 0, Math.PI);
+    ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     SHARED 2D NAVIER-STOKES FLUID SOLVER (Stam, Jacobi 12)
+     ══════════════════════════════════════════════════════════ */
+  class Fluid {
+    constructor(N, M) {
+      this.N = N; this.M = M;
+      const n = (N + 2) * (M + 2);
+      this.u = new Float32Array(n); this.v = new Float32Array(n);
+      this.u0 = new Float32Array(n); this.v0 = new Float32Array(n);
+      this.d = new Float32Array(n); this.d0 = new Float32Array(n);
+      this.p = new Float32Array(n); this.div = new Float32Array(n);
+      this.a = new Uint8Array(n);
+      this.iters = 10;
+    }
+    at(i, j) { return i + (this.N + 2) * j; }
+    step(dt) {
+      this.force(dt);
+      this.project();
+      let t = this.u; this.u = this.u0; this.u0 = t;
+      t = this.v; this.v = this.v0; this.v0 = t;
+      this.advect(1, this.u, this.u0, this.u0, this.v0, dt);
+      this.advect(2, this.v, this.v0, this.u0, this.v0, dt);
+      this.project();
+      for (let j = 1; j <= this.M; j++) for (let i = 1; i <= this.N; i++) {
+        const k = this.at(i, j); if (this.a[k]) { this.u[k] = 0; this.v[k] = 0; }
+      }
+      t = this.d; this.d = this.d0; this.d0 = t;
+      this.advect(0, this.d, this.d0, this.u, this.v, dt);
+      if (this.after) this.after();
+    }
+    force() {}
+    bnd(b, x) {
+      const { N, M } = this;
+      for (let j = 1; j <= M; j++) {
+        x[this.at(0, j)] = b === 1 ? -x[this.at(1, j)] : x[this.at(1, j)];
+        x[this.at(N + 1, j)] = b === 1 ? -x[this.at(N, j)] : x[this.at(N, j)];
+      }
+      for (let i = 1; i <= N; i++) {
+        x[this.at(i, 0)] = b === 2 ? -x[this.at(i, 1)] : x[this.at(i, 1)];
+        x[this.at(i, M + 1)] = b === 2 ? -x[this.at(i, M)] : x[this.at(i, M)];
+      }
+    }
+    project() {
+      const { N, M, u, v, p, div } = this;
+      for (let j = 1; j <= M; j++) for (let i = 1; i <= N; i++) {
+        const k = this.at(i, j);
+        div[k] = -0.5 * (u[k + 1] - u[k - 1] + v[k + N + 2] - v[k - N - 2]);
+        p[k] = 0;
+      }
+      this.bnd(0, div); this.bnd(0, p);
+      for (let it = 0; it < this.iters; it++) {
+        for (let j = 1; j <= M; j++) for (let i = 1; i <= N; i++) {
+          const k = this.at(i, j);
+          p[k] = (div[k] + p[k - 1] + p[k + 1] + p[k - N - 2] + p[k + N + 2]) * 0.25;
+        }
+        this.bnd(0, p);
+      }
+      for (let j = 1; j <= M; j++) for (let i = 1; i <= N; i++) {
+        const k = this.at(i, j);
+        u[k] -= 0.5 * (p[k + 1] - p[k - 1]);
+        v[k] -= 0.5 * (p[k + N + 2] - p[k - N - 2]);
+      }
+      this.bnd(1, u); this.bnd(2, v);
+    }
+    advect(b, d, d0, u, v, dt) {
+      const { N, M } = this;
+      for (let j = 1; j <= M; j++) for (let i = 1; i <= N; i++) {
+        const k = this.at(i, j);
+        const x = clamp(i - dt * u[k], 0.5, N + 0.5);
+        const y = clamp(j - dt * v[k], 0.5, M + 0.5);
+        const i0 = x | 0, j0 = y | 0;
+        const s1 = x - i0, s0 = 1 - s1, t1 = y - j0, t0 = 1 - t1;
+        const k00 = this.at(i0, j0), k10 = this.at(i0 + 1, j0), k01 = this.at(i0, j0 + 1), k11 = this.at(i0 + 1, j0 + 1);
+        d[k] = s0 * (t0 * d0[k00] + t1 * d0[k01]) + s1 * (t0 * d0[k10] + t1 * d0[k11]);
+      }
+      this.bnd(b, d);
+    }
+    maxSpeed() {
+      let m = 0;
+      for (let k = 0; k < this.u.length; k++) { const s = Math.abs(this.u[k]) + Math.abs(this.v[k]); if (s > m) m = s; }
+      return m;
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     STAGE 01: MIXING ENGINE
+     ══════════════════════════════════════════════════════════ */
+  const mixing = (() => {
+    const N = 84, M = 84, F = new Fluid(N, M);
+    const NP = innerWidth < 900 ? 12000 : 20000;
+    const lbl = $("m-part-label"); if (lbl) lbl.textContent = NP.toLocaleString() + " PARTICLES";
+    const px = new Float32Array(NP), py = new Float32Array(NP);
+    const G = 20, cell = new Float32Array(G * G);
+    const impR = 0.25 * N;
+    let t = 0, rpm = 1.0, uni = 0, cv0 = 0, curCv = 1.8, shear = 680;
+    const hist = [];
+
+    function reset() {
+      F.u.fill(0); F.v.fill(0);
+      const blobs = [[N * 0.28, M * 0.26, N * 0.12], [N * 0.72, M * 0.34, N * 0.11], [N * 0.45, M * 0.76, N * 0.12]];
+      let k = 0;
+      for (const [bx, by, br] of blobs) {
+        const n = Math.floor(NP / 3);
+        for (let q = 0; q < n && k < NP; q++) {
+          const rr = Math.sqrt(Math.random()) * br, aa = Math.random() * Math.PI * 2;
+          px[k] = bx + Math.cos(aa) * rr; py[k] = by + Math.sin(aa) * rr; k++;
+        }
+      }
+      while (k < NP) { px[k] = N * 0.5; py[k] = M * 0.5; k++; }
+      t = 0; cv0 = 0; uni = 0; curCv = 1.8; hist.length = 0;
+    }
+    function impCenter() { return [N / 2 + Math.cos(t * 0.68 * rpm) * 0.17 * N, M / 2 + Math.sin(t * 0.51 * rpm) * 0.17 * M]; }
+    F.force = function (dt) {
+      const dir = Math.sin(t * 1.1) >= 0 ? 1 : -1;
+      const [cx, cy] = impCenter();
+      for (let j = 1; j <= M; j++) for (let i = 1; i <= N; i++) {
+        const k = F.at(i, j);
+        const dx = i - cx, dy = j - cy, r2 = dx * dx + dy * dy;
+        if (r2 < impR * impR) {
+          const r = Math.max(2, Math.sqrt(r2)), inv = 1 / r;
+          F.u[k] += dt * rpm * (dir * -dy * inv * 32);
+          F.v[k] += dt * rpm * (dir * dx * inv * 32);
+        }
+        F.u[k] *= 0.996; F.v[k] *= 0.996;
+      }
+    };
+    function step(dt) {
+      dt = clamp(dt, 0.008, 0.04);
+      F.step(dt);
+      for (let k = 0; k < NP; k++) {
+        const i = clamp(px[k] | 0, 1, N), j = clamp(py[k] | 0, 1, M);
+        const id = F.at(i, j);
+        px[k] += F.u[id] * dt + (Math.random() - 0.5) * 1.2 * rpm;
+        py[k] += F.v[id] * dt + (Math.random() - 0.5) * 1.2 * rpm;
+        const cdx = px[k] - N / 2, cdy = py[k] - M / 2, rr = Math.hypot(cdx, cdy), RW = N * 0.46;
+        if (rr > RW) { px[k] = N / 2 + (cdx / rr) * (RW - 0.2); py[k] = M / 2 + (cdy / rr) * (RW - 0.2); }
+      }
+      t += dt;
+      cell.fill(0);
+      for (let k = 0; k < NP; k++) {
+        const bi = clamp((px[k] / N * G) | 0, 0, G - 1), bj = clamp((py[k] / M * G) | 0, 0, G - 1);
+        cell[bj * G + bi]++;
+      }
+      let sv = 0, s2 = 0;
+      for (let q = 0; q < cell.length; q++) { sv += cell[q]; s2 += cell[q] * cell[q]; }
+      const mean = sv / cell.length;
+      const cv = mean > 0 ? Math.sqrt(Math.max(0, s2 / cell.length - mean * mean)) / mean : 0;
+      if (!cv0 && cv > 0.05) cv0 = cv;
+      curCv = cv;
+      uni = cv0 > 0 ? clamp(1 - cv / cv0, 0, 1) : 0;
+      shear = Math.round(clamp(F.maxSpeed() * 18 + 180 * rpm, 120, 980));
+      if (!hist.length || t - hist[hist.length - 1][0] > 0.25) {
+        hist.push([t, uni]); if (hist.length > 90) hist.shift();
+      }
+    }
+
+    const cv = $("cv-mixing"), cvCh = $("cv-mixing-chart");
+    // Pointer drag stirring
+    let drag = false, lx = 0, ly = 0;
+    cv.addEventListener("pointerdown", (e) => { drag = true; lx = e.clientX; ly = e.clientY; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener("pointerup", () => { drag = false; });
+    cv.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const rect = cv.getBoundingClientRect();
+      const side = Math.min(rect.width, rect.height) * 0.86;
+      const ox = (rect.width - side) * 0.5, oy = (rect.height - side) * 0.5;
+      const gx = clamp(((e.clientX - rect.left - ox) / side) * N, 2, N - 1) | 0;
+      const gy = clamp(((e.clientY - rect.top - oy) / side) * M, 2, M - 1) | 0;
+      const vx = clamp((e.clientX - lx) * 4.5, -60, 60), vy = clamp((e.clientY - ly) * 4.5, -60, 60);
+      lx = e.clientX; ly = e.clientY;
+      for (let dj = -4; dj <= 4; dj++) for (let di = -4; di <= 4; di++) {
+        const ii = clamp(gx + di, 1, N), jj = clamp(gy + dj, 1, M);
+        F.u[F.at(ii, jj)] += vx; F.v[F.at(ii, jj)] += vy;
+      }
+    });
+
+    function render() {
+      const { ctx, w, h } = prepCanvas(cv);
+      ctx.fillStyle = "#090908"; ctx.fillRect(0, 0, w, h);
+      const side = Math.min(w, h) * 0.86;
+      const cx = w * 0.5, cy = h * 0.5, rad = side * 0.5;
+
+      // Tank backdrop
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fillStyle = "#121210"; ctx.fill();
+      ctx.strokeStyle = "rgba(244,242,236,0.22)"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.clip();
+
+      // Particles (subsampled cleanly for crisp speed)
+      const ox = cx - rad, oy = cy - rad;
+      const sx = side / N, sy = side / M;
+      ctx.fillStyle = "rgba(244, 242, 236, 0.72)";
+      const stride = NP > 14000 ? 2 : 1;
+      for (let k = 0; k < NP; k += stride) {
+        ctx.fillRect(ox + px[k] * sx, oy + py[k] * sy, 1.5, 1.5);
+      }
+
+      // Eccentric impeller
+      const [icx, icy] = impCenter();
+      const ix = ox + icx * sx, iy = oy + icy * sy, ir = impR * sx * 0.65;
+      ctx.strokeStyle = "#ff5a1f"; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(ix, iy, ir * 0.45, 0, Math.PI * 2); ctx.stroke();
+      for (let b = 0; b < 3; b++) {
+        const a = t * 5.2 * rpm + (b * Math.PI * 2) / 3;
+        ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(ix + Math.cos(a) * ir, iy + Math.sin(a) * ir); ctx.stroke();
+      }
+      ctx.restore();
+
+      // Live trend chart
+      const { ctx: c2, w: cw, h: ch } = prepCanvas(cvCh);
+      c2.clearRect(0, 0, cw, ch);
+      c2.strokeStyle = "rgba(244,242,236,0.08)"; c2.lineWidth = 1;
+      for (let g = 1; g <= 3; g++) { const yy = (ch * g) / 4; c2.beginPath(); c2.moveTo(0, yy); c2.lineTo(cw, yy); c2.stroke(); }
+      if (hist.length > 1) {
+        c2.beginPath();
+        hist.forEach((pt, idx) => {
+          const x = (idx / (hist.length - 1)) * cw;
+          const y = ch - 6 - pt[1] * (ch - 14);
+          idx === 0 ? c2.moveTo(x, y) : c2.lineTo(x, y);
+        });
+        c2.strokeStyle = "#ff5a1f"; c2.lineWidth = 2.2; c2.stroke();
+      }
+
+      // Update Gauges
+      const uniPct = Math.round(uni * 100);
+      $("m-uni-val").textContent = uniPct + "%";
+      $("m-uni-bar").style.width = uniPct + "%";
+      $("m-shear-val").textContent = shear + " 1/s";
+      $("m-shear-bar").style.width = clamp((shear / 980) * 100, 5, 100) + "%";
+      $("m-cv-val").textContent = curCv.toFixed(2);
+      $("m-cv-bar").style.width = clamp((curCv / 2.2) * 100, 4, 100) + "%";
+    }
+
+    $("m-rpm")?.addEventListener("input", (e) => {
+      rpm = Number(e.target.value) / 100;
+      $("m-rpm-v").textContent = e.target.value + "%";
+    });
+    $("m-reset")?.addEventListener("click", reset);
+    reset();
+    for (let i = 0; i < 24; i++) step(0.025);
+    return { step, render, reset };
+  })();
+
+  /* ══════════════════════════════════════════════════════════
+     STAGE 02: COATING ENGINE (Slot-Die Shear Flow)
+     ══════════════════════════════════════════════════════════ */
+  const coating = (() => {
+    const N = 160, M = 44, F = new Fluid(N, M);
+    let gap = 14, speed = 18, meanS = 152.9, cvvS = 23.3, lenS = 82;
+    const BX = Math.round(N * 0.25);
+
+    function reset() {
+      F.u.fill(0); F.v.fill(0); F.d.fill(0); F.a.fill(0);
+      for (let i = 1; i <= N; i++) for (let j = 1; j <= M; j++) {
+        if (i <= BX && j < M - gap) F.a[F.at(i, j)] = 1;
+      }
+    }
+    F.force = function (dt) {
+      const v0 = speed * 0.16;
+      for (let j = 1; j <= M; j++) {
+        const s = (1 - (M - j) / M) ** 2;
+        for (let i = 1; i <= N; i++) {
+          const k = F.at(i, j);
+          F.v[k] += dt * 28;
+          F.u[k] += v0 * dt * 14 * s;
+          F.v[k] *= 0.995; F.u[k] *= 0.995;
+        }
+      }
+    };
+    F.after = function () {
+      const v0 = speed * 0.16;
+      for (let i = BX; i <= BX + 2; i++) for (let j = M - gap + 1; j <= M; j++) F.d[F.at(i, j)] = 1;
+      for (let i = N - 8; i <= N; i++) for (let j = 1; j <= M; j++) {
+        F.d[F.at(i, j)] *= 0.35;
+        if (F.u[F.at(i, j)] < v0 * 5) F.u[F.at(i, j)] = v0 * 5;
+      }
+      for (let i = 1; i <= N; i++) F.u[F.at(i, M + 1)] = v0 * 6;
+    };
+    function filmCol(i) {
+      let n = 0;
+      for (let j = M; j >= 1; j--) { if (F.d[F.at(i, j)] > 0.28) n++; else if (n > 0) break; }
+      return n;
+    }
+    const prof = new Float32Array(N);
+    function step(dt) {
+      F.step(clamp(dt, 0.008, 0.035));
+      let s = 0, s2 = 0, cnt = 0, wet = 0;
+      const i0 = Math.round(BX + (N - BX) * 0.25), i1 = Math.round(N * 0.92);
+      for (let i = 1; i <= N; i++) prof[i - 1] = filmCol(i) * 52;
+      for (let i = i0; i <= i1; i++) {
+        const col = prof[i - 1];
+        s += col; s2 += col * col; cnt++;
+        if (col > 25) wet++;
+      }
+      const mean = cnt ? s / cnt : 0;
+      const cv = mean > 1 ? (Math.sqrt(Math.max(0, s2 / cnt - mean * mean)) / mean) * 100 : 0;
+      const len = cnt ? (wet / cnt) * 100 : 0;
+      meanS += (mean - meanS) * 0.08;
+      cvvS += (cv - cvvS) * 0.08;
+      lenS += (len - lenS) * 0.08;
+    }
+
+    const cv = $("cv-coating"), cvCh = $("cv-coating-chart");
+    let webPhase = 0;
+    function render(dt) {
+      webPhase = (webPhase + dt * speed * 14) % 28;
+      const { ctx, w, h } = prepCanvas(cv);
+      ctx.fillStyle = "#090908"; ctx.fillRect(0, 0, w, h);
+
+      const padX = 22, padTop = 34, foilY = h - 38;
+      const drawW = w - padX * 2, drawH = foilY - padTop;
+      const dx = drawW / N, dy = drawH / M;
+
+      // Wet slurry density field
+      for (let i = BX; i <= N; i++) {
+        const colH = filmCol(i) * dy;
+        if (colH > 0.5) {
+          const x = padX + (i - 1) * dx;
+          const grad = ctx.createLinearGradient(0, foilY - colH, 0, foilY);
+          grad.addColorStop(0, "rgba(244,242,236,0.92)");
+          grad.addColorStop(1, "rgba(170,165,158,0.65)");
+          ctx.fillStyle = grad;
+          ctx.fillRect(x, foilY - colH, dx + 0.8, colH);
+        }
+      }
+
+      // Slot-die nozzle block
+      const dieW = BX * dx;
+      const dieH = (M - gap) * dy;
+      ctx.fillStyle = "#22211e";
+      ctx.fillRect(padX, padTop, dieW, dieH);
+      ctx.strokeStyle = "rgba(244,242,236,0.35)"; ctx.lineWidth = 1.2;
+      ctx.strokeRect(padX + 0.5, padTop + 0.5, dieW, dieH);
+      // Orange slurry feed highlight at die lip
+      ctx.fillStyle = "#ff5a1f";
+      ctx.fillRect(padX + dieW - 4, padTop + dieH, 5, foilY - (padTop + dieH));
+
+      // Moving Copper Foil Substrate
+      const cuGrad = ctx.createLinearGradient(0, foilY, 0, foilY + 14);
+      cuGrad.addColorStop(0, "#d4793c"); cuGrad.addColorStop(1, "#7d411b");
+      ctx.fillStyle = cuGrad;
+      ctx.fillRect(padX, foilY, drawW, 14);
+      // Moving web motion ticks
+      ctx.strokeStyle = "rgba(255,220,190,0.45)"; ctx.lineWidth = 1;
+      for (let x = padX + webPhase; x < padX + drawW; x += 28) {
+        ctx.beginPath(); ctx.moveTo(x, foilY + 3); ctx.lineTo(x + 8, foilY + 3); ctx.stroke();
+      }
+
+      // Chart: Wet thickness profile
+      const { ctx: c2, w: cw, h: ch } = prepCanvas(cvCh);
+      c2.clearRect(0, 0, cw, ch);
+      const maxUm = 280;
+      const avgY = ch - 8 - clamp(meanS / maxUm, 0, 1) * (ch - 16);
+      c2.strokeStyle = "rgba(255,90,31,0.65)"; c2.setLineDash([4, 4]);
+      c2.beginPath(); c2.moveTo(0, avgY); c2.lineTo(cw, avgY); c2.stroke();
+      c2.setLineDash([]);
+
+      c2.beginPath();
+      const i0 = BX + 4, i1 = Math.round(N * 0.94);
+      for (let i = i0; i <= i1; i++) {
+        const x = ((i - i0) / (i1 - i0)) * cw;
+        const y = ch - 8 - clamp(prof[i - 1] / maxUm, 0, 1) * (ch - 16);
+        i === i0 ? c2.moveTo(x, y) : c2.lineTo(x, y);
+      }
+      c2.strokeStyle = "#f4f2ec"; c2.lineWidth = 2; c2.stroke();
+
+      // Update Gauges
+      $("c-th-val").textContent = meanS.toFixed(1) + " µm";
+      $("c-th-bar").style.width = clamp((meanS / 260) * 100, 4, 100) + "%";
+      $("c-cv-val").textContent = cvvS.toFixed(1) + " %";
+      $("c-cv-bar").style.width = clamp(cvvS, 4, 100) + "%";
+      $("c-len-val").textContent = lenS.toFixed(0) + " %";
+      $("c-len-bar").style.width = clamp(lenS, 4, 100) + "%";
+    }
+
+    $("c-gap")?.addEventListener("input", (e) => {
+      gap = Number(e.target.value);
+      $("c-gap-v").textContent = (gap * 8) + " µm";
+      reset();
+    });
+    $("c-spd")?.addEventListener("input", (e) => {
+      speed = Number(e.target.value);
+      $("c-spd-v").textContent = speed + " m/min";
+    });
+    reset();
+    for (let i = 0; i < 65; i++) step(0.025);
+    return { step, render, reset };
+  })();
+
+  /* ══════════════════════════════════════════════════════════
+     STAGE 03: DRYING ENGINE (Solvent Diffusion + Binder PDE)
+     ══════════════════════════════════════════════════════════ */
+  const drying = (() => {
+    const N = 140, M = 84;
+    const c = new Float32Array(N * M), c0 = new Float32Array(N * M);
+    const b = new Float32Array(N * M), b0 = new Float32Array(N * M);
+    const grain = new Float32Array(N * M);
+    for (let k = 0; k < N * M; k++) { const h = Math.sin(k * 12.9898 + 78.233) * 43758.5453; grain[k] = (h - Math.floor(h) - 0.5) * 16; }
+
+    const off = document.createElement("canvas"); off.width = N; off.height = M;
+    const octx = off.getContext("2d"), img = octx.createImageData(N, M);
+    const vapors = Array.from({ length: 28 }, (_, i) => ({ x: (i + 0.5) / 28, y: Math.random(), vy: 0.25 + Math.random() * 0.45, r: 1 + Math.random() * 1.4 }));
+
+    let temp = 130, press = 101, prog = 0, mig = 1, simT = 0;
+    const idx = (i, j) => j * N + i;
+
+    function reset() {
+      for (let k = 0; k < N * M; k++) { c[k] = 1; b[k] = 1; }
+      prog = 0; mig = 1; simT = 0;
+    }
+    function step(dt) {
+      dt = clamp(dt, 0.008, 0.04);
+      simT += dt;
+      const rate = (0.10 + (temp - 60) / 90 * 0.85) * (1 + (1 - press / 101) * 0.25);
+      const migK = 0.52 * (0.10 + (temp - 60) / 90 * 1.9) * (0.15 + 0.85 * (press / 101));
+      const flux = rate * 0.95 * dt, D = 0.16;
+      c0.set(c); b0.set(b);
+      for (let j = 1; j < M - 1; j++) for (let i = 1; i < N - 1; i++) {
+        const k = idx(i, j);
+        c[k] = Math.max(0, c0[k] + D * dt * 12 * (c0[k - 1] + c0[k + 1] + c0[k - N] + c0[k + N] - 4 * c0[k]));
+      }
+      for (let i = 0; i < N; i++) { const ks = idx(i, M - 1); c[ks] -= Math.min(c[ks], flux); }
+      for (let j = M - 2; j >= 1; j--) for (let i = 0; i < N; i++) {
+        const kd = idx(i, j), ku = idx(i, j + 1);
+        const flow = Math.max(0, c0[kd] - c0[ku]) * 0.85 * migK * dt;
+        if (flow > 1e-6) { const db = Math.min(b0[kd] * 0.06, flow * (b0[kd] + 0.5)); b[kd] -= db; b[ku] += db; }
+      }
+      const Db = 0.03 * dt * 60;
+      for (let j = 1; j < M - 1; j++) for (let i = 1; i < N - 1; i++) {
+        const k = idx(i, j);
+        b[k] += Db * (b0[k - 1] + b0[k + 1] + b0[k - N] + b0[k + N] - 4 * b0[k]);
+      }
+      let s = 0, sb = 0;
+      for (let k = 0; k < N * M; k++) { s += c[k]; b[k] = clamp(b[k], 0, 6); }
+      prog = 100 - (s / (N * M)) * 100;
+      for (let i = 0; i < N; i++) sb += b[idx(i, M - 1)] + b[idx(i, M - 2)];
+      mig = sb / (2 * N);
+      const vSpeed = 0.5 + rate * 1.1;
+      for (const p of vapors) { p.y -= p.vy * vSpeed * dt; if (p.y < 0) { p.y = 1; p.x = Math.random(); } }
+    }
+
+    const cv = $("cv-drying"), cvCh = $("cv-drying-chart");
+    function render() {
+      const { ctx, w, h } = prepCanvas(cv);
+      const headH = Math.round(h * 0.20), foilH = 14, matH = Math.max(40, h - headH - foilH);
+      ctx.fillStyle = "#090908"; ctx.fillRect(0, 0, w, h);
+
+      const px = img.data;
+      for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) {
+        const k = idx(i, j), o = ((M - 1 - j) * N + i) * 4;
+        const wet = clamp(c[k] / 1.12, 0, 1);
+        const extra = clamp(b[k] - 1.0, 0, 2.4);
+        const gr = grain[k];
+        let r = 26 + Math.pow(1 - wet, 0.85) * 140 + gr;
+        let g = 25 + Math.pow(1 - wet, 0.85) * 136 + gr;
+        let bl = 23 + Math.pow(1 - wet, 0.85) * 129 + gr;
+        const t2 = clamp(extra / 2.2, 0, 1);
+        px[o] = clamp(r * (1 - t2) + 255 * t2, 0, 255);
+        px[o + 1] = clamp(g * (1 - t2) + 90 * t2, 0, 255);
+        px[o + 2] = clamp(bl * (1 - t2) + 31 * t2, 0, 255);
+        px[o + 3] = 255;
+      }
+      octx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(off, 0, headH, w, matH);
+
+      ctx.strokeStyle = "rgba(244,242,236,0.32)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, headH + 0.5); ctx.lineTo(w, headH + 0.5); ctx.stroke();
+
+      const isVac = press < 25;
+      for (const p of vapors) {
+        const a = Math.sin(p.y * Math.PI) * 0.55;
+        ctx.fillStyle = isVac ? `rgba(244,242,236,${a.toFixed(3)})` : `rgba(255,90,31,${a.toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(p.x * w, p.y * headH, p.r, 0, Math.PI * 2); ctx.fill();
+      }
+      const cg = ctx.createLinearGradient(0, headH + matH, 0, h);
+      cg.addColorStop(0, "#d4793c"); cg.addColorStop(1, "#7d411b");
+      ctx.fillStyle = cg; ctx.fillRect(0, headH + matH, w, foilH);
+
+      // Depth profile chart (Left = Surface, Right = Cu Foil)
+      const { ctx: c2, w: cw, h: ch } = prepCanvas(cvCh);
+      c2.clearRect(0, 0, cw, ch);
+      c2.strokeStyle = "rgba(244,242,236,0.08)"; c2.lineWidth = 1;
+      for (let g = 1; g <= 3; g++) { const yy = (ch * g) / 4; c2.beginPath(); c2.moveTo(0, yy); c2.lineTo(cw, yy); c2.stroke(); }
+
+      // Solvent curve
+      c2.beginPath();
+      for (let j = M - 1; j >= 0; j -= 2) {
+        let cc = 0; for (let i = 0; i < N; i++) cc += c[idx(i, j)];
+        const x = ((M - 1 - j) / (M - 1)) * cw;
+        const y = ch - 6 - clamp(cc / N / 1.15, 0, 1) * (ch - 14);
+        j === M - 1 ? c2.moveTo(x, y) : c2.lineTo(x, y);
+      }
+      c2.strokeStyle = "#f4f2ec"; c2.lineWidth = 2; c2.stroke();
+
+      // Binder curve
+      c2.beginPath();
+      for (let j = M - 1; j >= 0; j -= 2) {
+        let bb = 0; for (let i = 0; i < N; i++) bb += b[idx(i, j)];
+        const x = ((M - 1 - j) / (M - 1)) * cw;
+        const y = ch - 6 - clamp((bb / N) / 5.5, 0, 1) * (ch - 14);
+        j === M - 1 ? c2.moveTo(x, y) : c2.lineTo(x, y);
+      }
+      c2.strokeStyle = "#ff5a1f"; c2.lineWidth = 2.4; c2.stroke();
+
+      // Gauges
+      $("d-mig-val").textContent = mig.toFixed(2) + "×";
+      $("d-mig-bar").style.width = clamp((mig / 6.0) * 100, 4, 100) + "%";
+      $("d-prog-val").textContent = prog.toFixed(1) + "%";
+      $("d-prog-bar").style.width = clamp(prog, 2, 100) + "%";
+      $("d-res-val").textContent = (100 - prog).toFixed(1) + "%";
+      $("d-res-bar").style.width = clamp(100 - prog, 2, 100) + "%";
+      $("d-time-label").textContent = `경과 ${simT.toFixed(1)} s · ${press} kPa · ${temp}°C`;
+    }
+
+    function applyCond(tVal, pVal, doReset = false) {
+      temp = tVal; press = pVal;
+      $("d-temp").value = tVal; $("d-temp-v").textContent = tVal + " °C";
+      $("d-press").value = pVal; $("d-press-v").textContent = pVal < 25 ? pVal + " kPa (진공)" : pVal + " kPa";
+      $("d-preset-atm").classList.toggle("is-active", pVal >= 80);
+      $("d-preset-vac").classList.toggle("is-active", pVal <= 15);
+      if (doReset) { reset(); for (let i = 0; i < 180; i++) step(0.025); }
+    }
+    $("d-temp")?.addEventListener("input", (e) => applyCond(Number(e.target.value), press, false));
+    $("d-press")?.addEventListener("input", (e) => applyCond(temp, Number(e.target.value), false));
+    $("d-preset-atm")?.addEventListener("click", () => applyCond(130, 101, true));
+    $("d-preset-vac")?.addEventListener("click", () => applyCond(80, 6, true));
+    $("d-reset")?.addEventListener("click", reset);
+
+    applyCond(130, 101, true);
+    return { step, render, reset };
+  })();
+
+  /* ══════════════════════════════════════════════════════════
+     STAGE 04: CALENDERING ENGINE (Roll Compaction)
+     ══════════════════════════════════════════════════════════ */
+  const calendering = (() => {
+    const COLS = 36, ROWS = 8, SP = 2.05, R = 1;
+    const T0 = (ROWS - 1) * SP + 2 * R;
+    const parts = [];
+    let gapUm = 76, den = 1.51, thickUm = 76, por = 44, crush = 0, t = 0;
+
+    function reset() {
+      parts.length = 0;
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        parts.push({ x: c * SP + 1.2 + (Math.random() - 0.5) * 0.45, y: r * SP + 1 + (Math.random() - 0.5) * 0.45 });
+      }
+    }
+    function targetH() { return T0 * Math.min(1, gapUm / 100); }
+    function step(dt) {
+      t += dt;
+      const h = targetH(), floorY = T0 + 1.5, topY = floorY - h;
+      for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) {
+        const p = parts[r * COLS + c];
+        const want = topY + R + (r / (ROWS - 1)) * Math.max(0.001, h - 2 * R);
+        p.y += (want - p.y) * 0.25;
+      }
+      const red = 1 - h / T0;
+      den = 1.15 / Math.max(0.5, h / T0);
+      thickUm = (h / T0) * 100;
+      por = 58 * (h / T0);
+      crush = clamp(((red - 0.30) / 0.15) * 100, 0, 100);
+    }
+
+    const cv = $("cv-calendering"), cvCh = $("cv-calendering-chart");
+    function render() {
+      const { ctx, w, h } = prepCanvas(cv);
+      ctx.fillStyle = "#090908"; ctx.fillRect(0, 0, w, h);
+
+      const spanX = COLS * SP + 2;
+      const sc = Math.min((w - 64) / spanX, (h - 128) / (T0 + 6));
+      const ox = (w - spanX * sc) * 0.5;
+      const floorPx = h * 0.72;
+      const hPx = targetH() * sc;
+      const topPx = floorPx - hPx;
+
+      // Top & Bottom Steel Rollers
+      const rollR = Math.max(w * 0.72, 320);
+      ctx.save();
+      ctx.fillStyle = "#1d1d1b";
+      ctx.strokeStyle = "rgba(244,242,236,0.34)"; ctx.lineWidth = 1.6;
+      // Top roll
+      ctx.beginPath(); ctx.arc(w * 0.5, topPx - rollR, rollR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // Bottom roll
+      ctx.beginPath(); ctx.arc(w * 0.5, floorPx + 10 + rollR, rollR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // Rotating tick marks on top roll edge
+      ctx.strokeStyle = "rgba(255,90,31,0.65)"; ctx.lineWidth = 2;
+      for (let k = -6; k <= 6; k++) {
+        const ang = Math.PI * 0.5 + ((k * 0.055 + (t * 0.18) % 0.055) - 0.02);
+        const x1 = w * 0.5 + Math.cos(ang) * (rollR - 8), y1 = topPx - rollR + Math.sin(ang) * (rollR - 8);
+        const x2 = w * 0.5 + Math.cos(ang) * rollR, y2 = topPx - rollR + Math.sin(ang) * rollR;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      }
+      ctx.restore();
+
+      // Cu foil base
+      ctx.fillStyle = "#c87137";
+      ctx.fillRect(ox - 12, floorPx, spanX * sc + 24, 10);
+
+      // Active material particles
+      const stressRatio = crush / 100;
+      const pr = Math.max(2.6, R * sc * 0.88);
+      for (let idx = 0; idx < parts.length; idx++) {
+        const p = parts[idx];
+        const px = ox + p.x * sc;
+        const py = floorPx - (T0 + 1.5 - p.y) * sc;
+        const isStressed = stressRatio > 0.05 && ((idx * 17) % 100) < crush;
+        ctx.fillStyle = isStressed ? "#ff5a1f" : "rgba(232,228,220,0.88)";
+        ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Trade-off curve chart (Gap 100 → 58 µm)
+      const { ctx: c2, w: cw, h: ch } = prepCanvas(cvCh);
+      c2.clearRect(0, 0, cw, ch);
+      c2.strokeStyle = "rgba(244,242,236,0.08)"; c2.lineWidth = 1;
+      for (let g = 1; g <= 3; g++) { const yy = (ch * g) / 4; c2.beginPath(); c2.moveTo(0, yy); c2.lineTo(cw, yy); c2.stroke(); }
+
+      // Density curve (100 → 58 µm left to right)
+      c2.beginPath();
+      for (let i = 0; i <= 42; i++) {
+        const gUm = 100 - i;
+        const d = 1.15 / Math.max(0.5, gUm / 100);
+        const x = (i / 42) * cw;
+        const y = ch - 6 - clamp((d - 1.0) / 1.2, 0, 1) * (ch - 14);
+        i === 0 ? c2.moveTo(x, y) : c2.lineTo(x, y);
+      }
+      c2.strokeStyle = "#f4f2ec"; c2.lineWidth = 2; c2.stroke();
+
+      // Crush risk curve
+      c2.beginPath();
+      for (let i = 0; i <= 42; i++) {
+        const gUm = 100 - i;
+        const cr = clamp((((1 - gUm / 100) - 0.30) / 0.15), 0, 1);
+        const x = (i / 42) * cw;
+        const y = ch - 6 - cr * (ch - 14);
+        i === 0 ? c2.moveTo(x, y) : c2.lineTo(x, y);
+      }
+      c2.strokeStyle = "#ff5a1f"; c2.lineWidth = 2.2; c2.stroke();
+
+      // Current operating vertical marker
+      const curX = clamp((100 - gapUm) / 42, 0, 1) * cw;
+      c2.strokeStyle = "rgba(244,242,236,0.55)"; c2.setLineDash([3, 3]);
+      c2.beginPath(); c2.moveTo(curX, 0); c2.lineTo(curX, ch); c2.stroke();
+      c2.setLineDash([]);
+
+      // Gauges
+      $("k-den-val").textContent = den.toFixed(2) + " g/cc";
+      $("k-den-bar").style.width = clamp(((den - 1.0) / 1.2) * 100, 5, 100) + "%";
+      $("k-por-val").textContent = por.toFixed(1) + "%";
+      $("k-por-bar").style.width = clamp((por / 65) * 100, 5, 100) + "%";
+      $("k-crush-val").textContent = Math.round(crush) + "%";
+      $("k-crush-bar").style.width = clamp(crush, 0, 100) + "%";
+      $("k-th-label").textContent = `두께 ${thickUm.toFixed(1)} µm`;
+    }
+
+    function setGap(v) {
+      gapUm = v;
+      $("k-gap").value = v;
+      $("k-gap-v").textContent = v + " µm";
+      $("k-p-100").classList.toggle("is-active", v >= 98);
+      $("k-p-76").classList.toggle("is-active", v >= 70 && v < 98);
+      $("k-p-62").classList.toggle("is-active", v < 70);
+    }
+    $("k-gap")?.addEventListener("input", (e) => setGap(Number(e.target.value)));
+    $("k-p-100")?.addEventListener("click", () => setGap(100));
+    $("k-p-76")?.addEventListener("click", () => setGap(76));
+    $("k-p-62")?.addEventListener("click", () => setGap(62));
+
+    reset();
+    for (let i = 0; i < 20; i++) step(0.016);
+    return { step, render, reset };
+  })();
+
+  /* ══════════════════════════════════════════════════════════
+     RESILIENT MAIN LOOP (rAF First Line + try/catch)
+     ══════════════════════════════════════════════════════════ */
+  let simClock = 0, lastNow = performance.now(), frozen = false;
+
+  // Initial paint for all 4 stages so screenshots/jumps never see blank canvases
+  mixing.render();
+  coating.render(0.016);
+  drying.render();
+  calendering.render();
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    try {
+      const dt = clamp((now - lastNow) / 1000, 0.004, 0.04);
+      lastNow = now;
+      if (!frozen) {
+        simClock += dt;
+        smx += (mx - smx) * 0.08;
+        smy += (my - smy) * 0.08;
+        if (visible.hero) { drawBars(simClock); drawCell(simClock); }
+        if (visible.mixing) { mixing.step(dt); mixing.render(); }
+        if (visible.coating) { coating.step(dt); coating.render(dt); }
+        if (visible.drying) { drying.step(dt * 1.8); drying.render(); }
+        if (visible.calendering) { calendering.step(dt); calendering.render(); }
+      }
+    } catch (err) {
+      console.error("[loop]", err);
+    }
+  }
+  requestAnimationFrame(frame);
+
+  window.__bat = {
+    probe: () => ({
+      t: +simClock.toFixed(3),
+      overflowX: document.documentElement.scrollWidth - innerWidth,
+      visible: { ...visible }
+    }),
+    freeze: (f) => { frozen = !!f; }
+  };
+})();
+</script>
+</body>
+</html>
